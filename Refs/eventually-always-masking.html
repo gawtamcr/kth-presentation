@@ -1,0 +1,439 @@
+<title>Eventually, Eventually-Always</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* layout: one trajectory x(t), t=0..10, with a target line at x=5, drives a
+   predicate-margin row below it. Two formula panels follow: a plain
+   Eventually (needs only one column of the masking grid) and a nested
+   Eventually-Always (needs the full inner trace before the outer reduction
+   can run) — the same unroll/mask/reduce mechanic from the masking visual,
+   now tied to concrete physical units and a real reach requirement. */
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --fg:#242220; --muted:#6b6660; --border:#e3ddd2;
+  --accent:#1f4e4a; --accent-soft:#e4efec; --flag:#9a5b2e; --flag-soft:#f3e7da;
+  --pos:#1f6e4a; --pos-soft:#e3efe6; --neg:#a13e2c; --neg-soft:#f6e4de;
+  --mono:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+    --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+    --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+  --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+  --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--serif); font-size:16px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:36px 72px;
+}
+.page{max-width:900px; margin:0 auto; display:flex; flex-direction:column; gap:24px}
+.masthead{display:flex; flex-direction:column; gap:5px}
+.masthead .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600}
+.masthead h1{font-size:clamp(26px,5vw,34px); margin:0; font-weight:700; letter-spacing:-.01em}
+.masthead p{margin:4px 0 0; color:var(--muted); font-size:14.5px; max-width:70ch}
+.formula-row{display:flex; flex-direction:column; gap:4px; font-family:var(--mono); font-size:13.5px; background:var(--accent-soft); border-radius:10px; padding:10px 14px}
+.formula-row .f1{color:var(--fg)} .formula-row .f2{color:var(--fg)}
+.formula-row .f1 b, .formula-row .f2 b{color:var(--accent)}
+
+.panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px clamp(14px,4vw,26px); display:flex; flex-direction:column; gap:14px; min-width:0}
+.panel-head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.panel-tag{font-family:var(--mono); font-weight:600; color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:2px 11px; font-size:12.5px; flex:none}
+.panel-head h2{margin:0; font-size:18px; font-weight:700}
+.panel p.lede{margin:0; color:var(--muted); font-size:14px; max-width:68ch}
+
+.plot-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--accent-soft); padding:8px}
+svg#traj{display:block; min-width:680px}
+.axis-label{font-family:var(--mono); font-size:10px; fill:var(--muted)}
+.band-label{font-family:var(--mono); font-size:11px; font-weight:600}
+
+.sliders{display:grid; grid-template-columns:repeat(11, minmax(52px,1fr)); gap:6px}
+.slider-item{display:flex; flex-direction:column; align-items:center; gap:3px; min-width:0}
+.slider-item label{font-family:var(--mono); font-size:10px; color:var(--muted)}
+.slider-item b{font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums}
+.slider-item input[type=range]{writing-mode:vertical-lr; direction:rtl; width:16px; height:64px; accent-color:var(--accent)}
+
+.signal-strip{display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; font-family:var(--mono); font-size:11.5px}
+.signal-strip .c{flex:1; text-align:center; padding:6px 2px; border-right:1px solid var(--border); min-width:0}
+.signal-strip .c:last-child{border-right:none}
+.signal-strip .c .t{color:var(--muted); font-size:9.5px; display:block}
+.signal-strip .c .v{font-weight:600; font-variant-numeric:tabular-nums}
+.signal-strip .c.pos{background:var(--pos-soft)} .signal-strip .c.pos .v{color:var(--pos)}
+.signal-strip .c.neg{background:var(--neg-soft)} .signal-strip .c.neg .v{color:var(--neg)}
+
+.grid-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px}
+table.mgrid{border-collapse:collapse; font-family:var(--mono); font-size:11.5px; margin:0 auto}
+table.mgrid td{
+  width:36px; height:28px; text-align:center; vertical-align:middle;
+  border:1px solid var(--border); font-variant-numeric:tabular-nums;
+  background:var(--surface); color:var(--muted); transition:background .15s, opacity .15s;
+}
+table.mgrid td.rowhead{font-weight:600; color:var(--fg); background:transparent; border:none; width:30px}
+table.mgrid td.colhead{font-weight:600; color:var(--fg); background:transparent; border:none; height:20px; font-size:10.5px}
+table.mgrid td.colhead.col0{color:var(--accent)}
+table.mgrid td.kept{background:var(--surface); color:var(--fg); font-weight:600}
+table.mgrid td.kept.col0{outline:2px solid var(--accent); outline-offset:-2px; background:var(--accent-soft)}
+table.mgrid td.masked{opacity:.22}
+table.mgrid td.pad{opacity:.4; font-style:italic}
+table.mgrid tr.trace-row td{border-top:2px solid var(--fg); font-weight:700}
+table.mgrid tr.trace-row td.filled{color:var(--accent)}
+table.mgrid tr.trace-row td.filled.pad{color:var(--flag); font-style:italic}
+
+.interval-row{display:flex; gap:18px; flex-wrap:wrap; font-family:var(--mono); font-size:12.5px; color:var(--muted); background:var(--accent-soft); border-radius:8px; padding:8px 12px}
+.interval-row label{display:flex; align-items:center; gap:8px}
+.interval-row b{color:var(--fg); font-variant-numeric:tabular-nums; min-width:1.2em; text-align:right}
+.interval-row input[type=range]{width:120px; accent-color:var(--accent)}
+
+.controls{display:flex; gap:8px; flex-wrap:wrap}
+button{
+  font-family:var(--mono); font-size:12.5px; font-weight:600; border:1px solid var(--border);
+  background:var(--surface); color:var(--fg); border-radius:8px; padding:7px 13px; cursor:pointer;
+}
+button:hover{border-color:var(--muted)}
+button.primary{border-color:var(--accent); color:var(--accent)}
+
+.result-row{display:flex; gap:12px; flex-wrap:wrap}
+.result{flex:1 1 150px; border:1px solid var(--border); border-radius:10px; padding:11px 13px; display:flex; flex-direction:column; gap:3px; min-width:0}
+.result .k{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+.result .v{font-family:var(--mono); font-size:20px; font-weight:600; font-variant-numeric:tabular-nums}
+.result.pos{background:var(--pos-soft)} .result.pos .v{color:var(--pos)}
+.result.neg{background:var(--neg-soft)} .result.neg .v{color:var(--neg)}
+.result.flat .v{color:var(--fg)}
+
+.take{display:flex; gap:10px; align-items:flex-start; font-size:14px; border-top:1px dashed var(--border); padding-top:12px}
+.take .pin{font-family:var(--mono); font-size:11px; color:var(--flag); background:var(--flag-soft); border-radius:6px; padding:1px 7px; flex:none; font-weight:600}
+.take span.text{color:var(--muted)}
+.take b{color:var(--fg)}
+
+footer{color:var(--muted); font-size:12px; text-align:center; padding-top:4px}
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <div class="kicker">Worked example · real units</div>
+    <h1>Reach, versus reach-and-hold</h1>
+    <p>A single trajectory <code>x(t)</code>, t=0…10, starting at x=0. One requirement only needs its score at the start; the other is nested, and needs the full robustness trace first. Drag any point on the path.</p>
+  </div>
+
+  <div class="formula-row">
+    <div class="f1">φ₁ = <b>◇<sub>[<span id="f-a1"></span>,<span id="f-b1"></span>]</sub></b> (x ≥ 5) &nbsp;—&nbsp; eventually, between t=<span id="f-a1b"></span> and t=<span id="f-b1b"></span>, reach x ≥ 5</div>
+    <div class="f2">φ₂ = <b>◇<sub>[<span id="f-aout"></span>,<span id="f-bout"></span>]</sub> □<sub>[<span id="f-ain"></span>,<span id="f-bin"></span>]</sub></b> (x ≥ 5) &nbsp;—&nbsp; eventually, within a window of length <span id="f-bout2"></span>, stay at x ≥ 5 for <span id="f-klen"></span> consecutive steps</div>
+  </div>
+
+  <!-- TRAJECTORY -->
+  <section class="panel">
+    <div class="panel-head"><span class="panel-tag">traj</span><h2>The trajectory and its predicate</h2></div>
+    <p class="lede">Teal band is the goal <code>x ≥ 5</code>. The predicate margin is <code>s(t) = x(t) − 5</code> — positive once the path is inside the band.</p>
+    <div class="plot-wrap"><svg id="traj" width="760" height="170" viewBox="0 0 760 170"></svg></div>
+    <div class="sliders" id="sliders"></div>
+    <div class="signal-strip" id="signal-strip"></div>
+  </section>
+
+  <!-- PHI 1 -->
+  <section class="panel">
+    <div class="panel-head"><span class="panel-tag">φ₁</span><h2>Plain Eventually — one column is all that's used</h2></div>
+    <p class="lede">The masking grid computes a value for every starting time t (teal outline = column 0). Because φ₁ sits at the top of the formula, nothing ever reads the other columns — only column 0's window matters.</p>
+    <div class="interval-row">
+      <label>a <b id="a1-val"></b><input type="range" id="a1-slider" min="0" max="10" step="1" value="7"></label>
+      <label>b <b id="b1-val"></b><input type="range" id="b1-slider" min="0" max="10" step="1" value="10"></label>
+    </div>
+    <div class="grid-wrap"><table class="mgrid" id="grid-phi1"></table></div>
+    <div class="controls"><button class="primary" id="btn-phi1">Compute (one shot)</button><button id="btn-phi1-reset">Reset</button></div>
+    <div class="result-row">
+      <div class="result" id="phi1-box"><span class="k">ρ(φ₁) = max(s₇,s₈,s₉,s₁₀)</span><span class="v" id="phi1-val">—</span></div>
+    </div>
+  </section>
+
+  <!-- PHI 2 INNER -->
+  <section class="panel">
+    <div class="panel-head"><span class="panel-tag">φ₂ · 1</span><h2>Inner Always[0,2] — now every column is needed</h2></div>
+    <p class="lede">The outer Eventually needs to know, for <b>every</b> starting time t, whether an always-safe window begins there. So this time the full trace is the answer, not one column. Columns whose window runs past the horizon get padded cells (italic), filled with a very large value so they can never be the minimum.</p>
+    <div class="interval-row">
+      <label>a <b id="ain-val"></b><input type="range" id="ain-slider" min="0" max="6" step="1" value="0"></label>
+      <label>b <b id="bin-val"></b><input type="range" id="bin-slider" min="0" max="6" step="1" value="2"></label>
+    </div>
+    <div class="grid-wrap"><table class="mgrid" id="grid-inner"></table></div>
+    <div class="controls"><button class="primary" id="btn-inner">Compute inner trace (one shot)</button><button id="btn-inner-reset">Reset</button></div>
+  </section>
+
+  <!-- PHI 2 OUTER -->
+  <section class="panel">
+    <div class="panel-head"><span class="panel-tag">φ₂ · 2</span><h2>Outer Eventually[0,10] — reduces the inner trace</h2></div>
+    <p class="lede">The outer operator's "signal" is no longer <code>x(t)</code> — it is the inner trace computed above. When its window spans the whole horizon this reduction needs column 0 only, same as φ₁ — but reading from the trace, not from x directly. Shrink the window below and it stops being the whole horizon — then column 0 alone is no longer enough, and you'd need to look at later columns too.</p>
+    <div class="interval-row">
+      <label>a <b id="aout-val"></b><input type="range" id="aout-slider" min="0" max="10" step="1" value="0"></label>
+      <label>b <b id="bout-val"></b><input type="range" id="bout-slider" min="0" max="10" step="1" value="10"></label>
+    </div>
+    <div class="grid-wrap"><table class="mgrid" id="grid-outer"></table></div>
+    <div class="controls"><button class="primary" id="btn-outer">Compute (one shot)</button><button id="btn-outer-reset">Reset</button></div>
+    <div class="result-row">
+      <div class="result flat"><span class="k">max over genuine columns (t=0…8)</span><span class="v" id="outer-genuine">—</span></div>
+      <div class="result" id="outer-box"><span class="k">ρ(φ₂) = max over all columns (incl. padded)</span><span class="v" id="outer-val">—</span></div>
+    </div>
+    <div class="take"><span class="pin">watch for</span><span class="text">If the maximizer lands on a padded column (t=9 or 10), the reported score is partly a boundary artifact — that column's "always" only ever saw one or two real samples before the padding took over. Compare the two numbers above: when they differ, the genuine columns are the ones actually worth trusting.</span></div>
+  </section>
+
+  <footer>s(t) = x(t) − 5 &nbsp;·&nbsp; ρ(◇ᵢφ) = max over i &nbsp;·&nbsp; ρ(□ᵢφ) = min over i</footer>
+</div>
+
+<script>
+function fmt(x){ return (Math.round(x*1000)/1000).toFixed(2); }
+const N = 11; // t = 0..10
+let xs = [0, 1, 2, 3, 3.5, 4, 4.5, 5.3, 5.6, 5.4, 5.5];
+const TARGET = 5;
+const DOMAIN_Y = [0, 6.2];
+
+function buildSliders(){
+  const wrap = document.getElementById("sliders");
+  wrap.innerHTML = "";
+  for(let i=0;i<N;i++){
+    const item = document.createElement("div");
+    item.className = "slider-item";
+    const label = document.createElement("label"); label.textContent = "t="+i;
+    const input = document.createElement("input");
+    input.type="range"; input.min=0; input.max=6.2; input.step=0.1; input.value=xs[i]; input.id="x"+i;
+    const b = document.createElement("b"); b.id = "xv-"+i; b.textContent = fmt(xs[i]);
+    input.addEventListener("input", e=>{ xs[i]=parseFloat(e.target.value); b.textContent=fmt(xs[i]); render(); });
+    item.appendChild(label); item.appendChild(input); item.appendChild(b);
+    wrap.appendChild(item);
+  }
+}
+buildSliders();
+
+function yToPx(v, H){ return H - ((v-DOMAIN_Y[0])/(DOMAIN_Y[1]-DOMAIN_Y[0]))*H; }
+function tToPx(t, W){ return (t/(N-1))*W; }
+
+function drawPlot(){
+  const svg = document.getElementById("traj");
+  const W = 700, H = 120, padL = 36, padT = 10;
+  let html = "";
+  const plotW = W, plotH = H;
+
+  const yTarget = yToPx(TARGET, plotH)+padT;
+  html += `<rect x="${padL}" y="${padT}" width="${plotW}" height="${yTarget-padT}" fill="var(--accent)" opacity="0.15"></rect>`;
+  html += `<line x1="${padL}" y1="${yTarget}" x2="${padL+plotW}" y2="${yTarget}" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4,3"></line>`;
+  html += `<text x="${padL+plotW-4}" y="${yTarget-5}" text-anchor="end" class="band-label" fill="var(--accent)">x = 5 (goal)</text>`;
+
+  for(let v=0; v<=6; v+=2){
+    const py = yToPx(v,plotH)+padT;
+    html += `<text x="${padL-6}" y="${py+3}" text-anchor="end" class="axis-label">${v}</text>`;
+  }
+
+  for(let i=0;i<N-1;i++){
+    const x0 = padL+tToPx(i,plotW), y0 = yToPx(xs[i],plotH)+padT;
+    const x1 = padL+tToPx(i+1,plotW), y1 = yToPx(xs[i+1],plotH)+padT;
+    html += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--fg)" stroke-width="1.6" opacity="0.6"></line>`;
+  }
+  for(let i=0;i<N;i++){
+    const px = padL+tToPx(i,plotW), py = yToPx(xs[i],plotH)+padT;
+    const col = xs[i]>=TARGET ? "var(--pos)" : "var(--fg)";
+    html += `<circle cx="${px}" cy="${py}" r="5.5" fill="var(--surface)" stroke="${col}" stroke-width="2.2"></circle>`;
+    html += `<text x="${px}" y="${padT+plotH+16}" text-anchor="middle" class="axis-label">t${i}</text>`;
+  }
+  svg.innerHTML = html;
+}
+
+function drawSignalStrip(){
+  const wrap = document.getElementById("signal-strip");
+  let html = "";
+  for(let i=0;i<N;i++){
+    const s = xs[i]-TARGET;
+    html += `<div class="c ${s>=0?'pos':'neg'}"><span class="t">s${i}</span><span class="v">${fmt(s)}</span></div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function sig(i){ return xs[i]-TARGET; }
+
+// ---------- interval state ----------
+let a1=7, b1=10;       // phi1 window
+let aIn=0, bIn=2;       // inner Always window (offset)
+let aOut=0, bOut=10;    // outer Eventually window (offset)
+
+function wireIntervalPair(aId,bId,aValId,bValId,get,set){
+  const aEl=document.getElementById(aId), bEl=document.getElementById(bId);
+  const aV=document.getElementById(aValId), bV=document.getElementById(bValId);
+  function sync(){
+    let a=parseInt(aEl.value), b=parseInt(bEl.value);
+    if(a>b){ b=a; bEl.value=b; }
+    aV.textContent=a; bV.textContent=b;
+    set(a,b);
+    updateFormulaLabels();
+    phi1Done=false; innerDone=false; outerDone=false;
+    renderPhi1(); renderInner(); renderOuter();
+  }
+  aEl.addEventListener("input", sync);
+  bEl.addEventListener("input", sync);
+  sync();
+}
+
+function updateFormulaLabels(){
+  document.getElementById("f-a1").textContent=a1;
+  document.getElementById("f-b1").textContent=b1;
+  document.getElementById("f-a1b").textContent=a1;
+  document.getElementById("f-b1b").textContent=b1;
+  document.getElementById("f-ain").textContent=aIn;
+  document.getElementById("f-bin").textContent=bIn;
+  document.getElementById("f-aout").textContent=aOut;
+  document.getElementById("f-bout").textContent=bOut;
+  document.getElementById("f-bout2").textContent=(bOut-aOut+1);
+  document.getElementById("f-klen").textContent=(bIn-aIn+1);
+}
+
+// ---------- phi1: plain Eventually[a1,b1] ----------
+let phi1Done = false;
+function renderPhi1(){
+  const tbl = document.getElementById("grid-phi1");
+  let html = "<tr><td class='rowhead'></td>";
+  for(let t=0;t<N;t++) html += `<td class="colhead ${t===0?'col0':''}">t=${t}</td>`;
+  html += "</tr>";
+  for(let i=0;i<N;i++){
+    html += `<tr><td class="rowhead">s${i}</td>`;
+    for(let t=0;t<N;t++){
+      const lo=a1, hi=b1;
+      const cls = (t===0 && i>=lo && i<=hi) ? "kept col0" : "masked";
+      html += `<td class="${cls}">${(t===0 && i>=lo && i<=hi) ? fmt(sig(i)) : ""}</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "<tr class='trace-row'><td class='rowhead'>ρ</td>";
+  for(let t=0;t<N;t++){
+    if(t===0 && phi1Done){
+      const vals=[]; for(let i=a1;i<=b1;i++) vals.push(sig(i));
+      html += `<td class="filled">${fmt(Math.max(...vals))}</td>`;
+    } else { html += "<td></td>"; }
+  }
+  html += "</tr>";
+  tbl.innerHTML = html;
+
+  const vals=[]; for(let i=a1;i<=b1;i++) vals.push(sig(i));
+  const val = Math.max(...vals);
+  const box = document.getElementById("phi1-box");
+  document.getElementById("phi1-val").textContent = phi1Done ? fmt(val) : "—";
+  box.className = "result " + (phi1Done ? (val>0?"pos":"neg") : "flat");
+  box.querySelector(".k").textContent = `ρ(φ₁) = max(s${a1}…s${b1})`;
+}
+document.getElementById("btn-phi1").addEventListener("click", ()=>{ phi1Done=true; renderPhi1(); });
+document.getElementById("btn-phi1-reset").addEventListener("click", ()=>{ phi1Done=false; renderPhi1(); });
+
+// ---------- phi2 inner: Always[aIn,bIn] ----------
+let innerDone = false;
+let innerTrace = [];
+
+function renderInner(){
+  const tbl = document.getElementById("grid-inner");
+  const kLen = bIn-aIn+1;
+  const maxRowIdx = (N-1)+bIn; // largest index any window ever reaches
+  const rows = maxRowIdx+1;
+  let html = "<tr><td class='rowhead'></td>";
+  for(let t=0;t<N;t++) html += `<td class="colhead">t=${t}</td>`;
+  html += "</tr>";
+  for(let i=0;i<rows;i++){
+    const isPadRow = i>=N;
+    html += `<tr><td class="rowhead">${isPadRow?'pad':'s'+i}</td>`;
+    for(let t=0;t<N;t++){
+      const lo=t+aIn, hi=t+bIn;
+      const inWin = (i>=lo && i<=hi);
+      let cls = inWin ? "kept" : "masked";
+      if(isPadRow && inWin) cls += " pad";
+      const label = inWin ? (isPadRow ? "+∞" : fmt(sig(i))) : "";
+      html += `<td class="${cls}">${label}</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "<tr class='trace-row'><td class='rowhead'>A(t)</td>";
+  for(let t=0;t<N;t++){
+    if(innerDone){
+      const usedPad = (t+bIn) >= N;
+      html += `<td class="filled ${usedPad?'pad':''}">${fmt(innerTrace[t])}</td>`;
+    } else { html += "<td></td>"; }
+  }
+  html += "</tr>";
+  tbl.innerHTML = html;
+}
+
+function computeInner(){
+  innerTrace = [];
+  for(let t=0;t<N;t++){
+    const lo=t+aIn, hi=t+bIn;
+    const vals = [];
+    for(let i=lo;i<=hi;i++){ vals.push(i<N ? sig(i) : 1e5); }
+    innerTrace.push(Math.min(...vals));
+  }
+  innerDone = true;
+  renderInner();
+}
+document.getElementById("btn-inner").addEventListener("click", computeInner);
+document.getElementById("btn-inner-reset").addEventListener("click", ()=>{ innerDone=false; renderInner(); });
+
+// ---------- phi2 outer: Eventually[aOut,bOut] over inner trace ----------
+let outerDone = false;
+function renderOuter(){
+  const tbl = document.getElementById("grid-outer");
+  let html = "<tr><td class='rowhead'></td>";
+  for(let t=0;t<N;t++) html += `<td class="colhead ${t===0?'col0':''}">t=${t}</td>`;
+  html += "</tr>";
+  html += "<tr><td class='rowhead'>A(i)</td>";
+  for(let i=0;i<N;i++){
+    const inWin = (i>=aOut && i<=bOut); // column 0's window [aOut,bOut]
+    const cls = inWin ? "kept col0" : "masked";
+    const label = (innerDone && inWin) ? fmt(innerTrace[i]) : "";
+    html += `<td class="${cls}">${label}</td>`;
+  }
+  html += "</tr>";
+  html += "<tr class='trace-row'><td class='rowhead'>ρ</td>";
+  for(let t=0;t<N;t++){
+    if(t===0 && outerDone){
+      const vals=[]; for(let i=aOut;i<=bOut;i++) vals.push(i<N?innerTrace[i]:-1e5);
+      html += `<td class="filled">${fmt(Math.max(...vals))}</td>`;
+    } else { html += "<td></td>"; }
+  }
+  html += "</tr>";
+  tbl.innerHTML = html;
+
+  if(outerDone){
+    const idxRange = []; for(let i=aOut;i<=bOut;i++) idxRange.push(i);
+    const genuineIdx = idxRange.filter(t => t<N && (t+bIn)<N);
+    const allIdx = idxRange.map(i => i<N ? i : null);
+    const genuineVals = genuineIdx.map(t=>innerTrace[t]);
+    const allVals = idxRange.map(i => i<N ? innerTrace[i] : -1e5);
+    const genuineMax = genuineVals.length ? Math.max(...genuineVals) : -Infinity;
+    const allMax = Math.max(...allVals);
+    document.getElementById("outer-genuine").textContent = isFinite(genuineMax) ? fmt(genuineMax) : "n/a";
+    document.getElementById("outer-val").textContent = fmt(allMax);
+    const box = document.getElementById("outer-box");
+    box.className = "result " + (allMax>0 ? "pos":"neg");
+  } else {
+    document.getElementById("outer-genuine").textContent = "—";
+    document.getElementById("outer-val").textContent = "—";
+    document.getElementById("outer-box").className = "result flat";
+  }
+}
+document.getElementById("btn-outer").addEventListener("click", ()=>{
+  if(!innerDone) computeInner();
+  outerDone = true;
+  renderOuter();
+});
+document.getElementById("btn-outer-reset").addEventListener("click", ()=>{ outerDone=false; renderOuter(); });
+
+function render(){
+  drawPlot();
+  drawSignalStrip();
+  phi1Done=false; innerDone=false; outerDone=false;
+  renderPhi1(); renderInner(); renderOuter();
+}
+
+wireIntervalPair("a1-slider","b1-slider","a1-val","b1-val", null, (a,b)=>{a1=a;b1=b;});
+wireIntervalPair("ain-slider","bin-slider","ain-val","bin-val", null, (a,b)=>{aIn=a;bIn=b;});
+wireIntervalPair("aout-slider","bout-slider","aout-val","bout-val", null, (a,b)=>{aOut=a;bOut=b;});
+
+render();
+</script>

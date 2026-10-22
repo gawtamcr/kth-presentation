@@ -61,9 +61,9 @@ def emu(v):
 
 # ───────────────────────────── figure assets ─────────────────────────────
 def pdf_png(rel, dpi=600):
-    """Render a thesis PDF figure to PNG in assets/, once."""
+    """Render a thesis PDF figure to PNG in assets/, again whenever the PDF is newer than the PNG."""
     out = HERE / (Path(rel).stem + ".png")
-    if not out.exists():
+    if not out.exists() or out.stat().st_mtime < (FIGS / rel).stat().st_mtime:
         subprocess.run(["pdftoppm", "-png", "-r", str(dpi), "-singlefile",
                         str(FIGS / rel), str(out.with_suffix(""))], check=True)
     return out
@@ -665,12 +665,10 @@ def slides():
         s.add(label(s, cols[1][0], y + 0.08, cols[1][1], 0.44, reads, size=17, color=INK, anchor="ctr"))
         s.add(label(s, cols[2][0], y + 0.08, cols[2][1], 0.44, ex, size=17, color=INK, anchor="ctr"))
     s.add(rule(s, 0.70, 12.65, 3.22 + 0.58 * 5))
-    s.add(label(s, 0.70, 6.25, 12.0, 0.32, "Disjunction and until are part of STL and are compiled, "
-                "but no study in this thesis evaluates them", size=14))
     s.notes = ("The evaluated fragment. A predicate is a margin function of the state that is "
                "non-negative when the predicate holds, for example the part within a tolerance of the seat. "
                "Negation, conjunction and the two bounded temporal operators build every requirement evaluated "
-               "here. Disjunction and until are compiled but not evaluated. [§3.2; Remark rem:fragment; §1.4]")
+               "in this talk. [§3.2; Remark rem:fragment]")
     out.append(s)
 
     # robustness
@@ -743,21 +741,6 @@ def slides():
                "diffusion model. Flow matching produces the same kind of result along straight-line "
                "paths. The prior used here is unconditional, trained once on demonstrations, and its only "
                "conditioning is the start state. [§3.3; §5.1.1]")
-    out.append(s)
-
-    # prior samples
-    s = content("Learned prior", "Background")
-    for k, (rel, cap) in enumerate([("2D/nav_demos.pdf", "Demonstrations"),
-                                    ("2D/nav_prior.pdf", "Samples of the unguided prior")]):
-        img = pdf_png(rel)
-        x0 = 0.9 + 6.0 * k
-        s.add(label(s, x0, 2.15, 5.6, 0.34, cap, size=16, color=INK, align="ctr"))
-        s.add(picture(s, img, *fit(img, x0, 2.55, 5.6, 4.25), cap), is_sp=False)
-    s.notes = ("Forty demonstrations and forty prior samples from the same start states, with no "
-               "requirement imposed. The prior reproduces the extent of the demonstrated motion and the "
-               "spread of the endpoints, and it has no input for any requirement. If asked: the prior "
-               "samples are rougher than the demonstrations, a median turn angle of 6.4 against 0.6 "
-               "degrees. [§5.2, fig:nav-data-prior]")
     out.append(s)
 
     # related work, one overview figure per class
@@ -908,7 +891,7 @@ def slides():
     gx, cw = 6.28, [3.15, 0.95, 1.35, 0.95]
     heads = ["Planner", "Learned prior", "Requirement", "Endpoint pin"]
     rows = [("Endpoint-inpaint planner", ["✓", "", "✓"], "9A9A9A"), ("STL-FM", ["✓", "✓", ""], BLUE),
-            ("Requirement-only optimizer", ["", "✓", ""], PINK)]
+            ("STL Optimizer (no-prior)", ["", "✓", ""], PINK)]
     xs = [gx + sum(cw[:i]) for i in range(4)]
     for x, w, h in zip(xs, cw, heads):
         s.add(label(s, x, 2.30, w, 0.55, h, size=14, align="l" if h == "Planner" else "ctr", anchor="b"))
@@ -919,34 +902,16 @@ def slides():
         for x, w, m in zip(xs[1:], cw[1:], marks):
             s.add(label(s, x, y, w, 0.62, m, size=22, color=INK, align="ctr", anchor="ctr"))
     s.add(rule(s, gx, gx + sum(cw), 5.32))
-    s.add(label(s, gx, 5.50, 6.2, 0.60, "STL-FM with endpoint pin differs from STL-FM in satisfaction rate by at most 0.05 on any class (backup)",
+    s.add(label(s, gx, 5.50, 6.2, 0.60, "STL-FM with endpoint pin differs from STL-FM in satisfaction rate by at most 0.05 on any of the six classes (backup)",
                 size=13))
     s.notes = ("Two settings. Planar navigation: 100 runs per class on one fixed instance per class, plans "
                "only. Cube manipulation in OGBench: 10 runs per class on three classes, each plan executed in "
                "the simulator. Each baseline differs from STL-FM in one component. The endpoint-inpaint planner "
                "replaces the requirement by a pinned endpoint instead of the robustness gradient. The "
-               "requirement-only optimizer keeps the requirement and removes the prior; it descends the "
+               "STL Optimizer (no-prior) keeps the requirement and removes the prior; it descends the "
                "violation penalty with a smoothness penalty and a velocity limit. A fourth planner, STL-FM "
-               "with endpoint pin, differs from STL-FM in satisfaction rate by at most 0.05 on any class. "
+               "with endpoint pin, differs from STL-FM in satisfaction rate by at most 0.05 on any of the six classes. "
                "[§5.1.2-5.1.3, tab:families, tab:planners]")
-    out.append(s)
-
-    # two metrics
-    s = content("Evaluation metrics", "Results")
-    eqimg(s, "metrics", 6.67, 2.30, align="c", descr="Logic satisfaction rate and task success rate")
-    s.add(label(s, CX, 4.55, CW, 1.60,
-                ("A run is one planner producing one plan for one requirement instance.",
-                 "The instance is fixed within a class, so a rate measures reliability on that instance",
-                 "under the planner’s own randomness, not generalization across scenes.",
-                 "In the cube study a proportional controller tracks the plan and a gripper state machine follows the plan."),
-                size=16, color=INK, align="ctr"))
-    s.notes = ("Logic satisfaction is the fraction of plans with positive robustness under the exact semantics, "
-               "which certifies that the plan satisfies the requirement by soundness. Task success is decided by the "
-               "environment on the executed trajectory: a proportional controller tracks the planned effector, "
-               "and a gripper state machine follows the plan. The two do not coincide, so they are reported "
-               "separately. The requirement instance is fixed within a class, so a rate measures reliability on "
-               "that instance under the planner's own randomness, not generalization across scenes. "
-               "[§5.1.4, rem:fixed-instance]")
     out.append(s)
 
     # one prior, six classes
@@ -974,18 +939,44 @@ def slides():
     img = HERE / "fig_nav_satisfaction.png"
     s.add(picture(s, img, *fit(img, CX, TOP, CW, 4.30), "Satisfaction rate per class for three planners"),
           is_sp=False)
-    claim(s, "Logic satisfaction alone does not distinguish STL-FM from the requirement-only optimizer")
+    claim(s, "Logic satisfaction alone does not distinguish STL-FM from the STL Optimizer")
     s.notes = ("Over 100 runs per class. The endpoint-inpaint planner satisfies reach on every run and no other "
                "class on any run: the pin fixes the end, and the prior generates the remainder of the trajectory, "
-               "which contains no dwell, order or avoidance. STL-FM satisfies the five history-dependent classes at 0.78 to 1.00. The "
-               "requirement-only optimizer satisfies every class on every run, so satisfaction alone does not "
-               "separate it from STL-FM. Evidence about the prior must come from other properties of the "
-               "plans. Plan time: 0.71 s for STL-FM, 20.14 s for the requirement-only optimizer. [tab:openloop, tab:anytime, §6.1]")
+               "which contains no dwell, order or avoidance. STL-FM satisfies the five history-dependent classes at "
+               "0.78 to 1.00. The STL Optimizer satisfies every class on every run, so satisfaction "
+               "alone does not separate it from STL-FM. Evidence about the prior must come from other properties of "
+               "the plans. Plan time: 0.42 to 1.15 s for STL-FM, 5.67 to 28.22 s for the STL Optimizer. "
+               "[tab:openloop, tab:anytime, §6.1]")
+    out.append(s)
+
+    # time to first satisfaction, in budget and in seconds
+    s = content("Time to satisfaction", "Results")
+    img = HERE / "fig_time_budget.png"
+    s.add(picture(s, img, *fit(img, CX, TOP, CW, 3.78), "First satisfaction as a percentage of the budget and in "
+                  "estimated seconds, per class, for STL-FM and the STL Optimizer"), is_sp=False)
+    s.add(label(s, CX, 5.88, CW, 0.30, "Medians over satisfying runs. Budgets of 64 steps for STL-FM and 1,500 to 6,000 "
+                "for the optimizer. Estimated first satisfaction, 0.10 to 1.07 s against 0.83 to 6.75 s", size=12,
+                align="ctr"))
+    claim(s, "The STL Optimizer satisfies the requirement earlier in its budget but later in wall-clock time")
+    s.notes = ("When in its budget each planner first satisfies the requirement, over the runs whose final plan "
+               "satisfies it. STL-FM takes 64 integration steps and the STL Optimizer 1,500 to 6,000 "
+               "gradient steps, according to the class. On nested reach-and-dwell, recurrence, sequence, sequence "
+               "with avoidance and composite, STL-FM first satisfies the requirement at 83 to 94 percent of its "
+               "budget, and on reach at 30 percent. The optimizer first satisfies it at 4 to 24 percent. In seconds "
+               "the order reverses. Assuming every step of a planner takes the same time, STL-FM first satisfies the "
+               "requirement after 0.10 to 1.07 seconds and the optimizer after 0.83 to 6.75, and on every class the "
+               "optimizer is the later. A whole plan takes 0.42 to 1.15 seconds for STL-FM and 5.67 to 28.22 seconds "
+               "for the optimizer. In the cube study STL-FM plans in 0.24 seconds and the optimizer in 0.96. In the "
+               "kitchen STL-FM plans in 0.25 seconds under both priors, against 0.16 and 0.21 seconds for the "
+               "unguided prior. Times are medians over 20 separate timing runs per class on a laptop GPU, an NVIDIA "
+               "RTX A500, without recording the robustness at every step. A repeated measurement of the cube and "
+               "kitchen times was up to 20 percent slower, with the same order of the planners. "
+               "[§5.2.3, tab:anytime; §5.3; §5.4; app:anytime]")
     out.append(s)
 
     # optimizing robustness alone
     s = content("Arena excursion", "Results")
-    for k, (key, cap) in enumerate([("seqavoid_stlonly", "Requirement-only optimizer, no prior"),
+    for k, (key, cap) in enumerate([("seqavoid_stlonly", "STL Optimizer"),
                                     ("seqavoid_guided", "STL-FM")]):
         img = pdf_png(OL.format(key))
         x0 = 1.20 + 5.70 * k
@@ -993,16 +984,18 @@ def slides():
         s.add(picture(s, img, *fit(img, x0, 2.48, 5.2, 3.55), f"{cap}, sequence with avoidance"), is_sp=False)
     s.add(label(s, CX, 6.07, CW, 0.28, "Sequence with avoidance, 25 of 100 plans per planner, arena clipped "
                 "at its edge", size=13, align="ctr"))
-    claim(s, "Every plan of the requirement-only optimizer for sequence with avoidance leaves the arena")
-    s.notes = ("The requirement-only optimizer removes the prior and optimizes robustness directly. It descends "
-               "the violation penalty with a smoothness penalty and a velocity limit. It satisfies every "
-               "requirement class on every run. On sequence with avoidance every one of its plans leaves "
+    claim(s, "Every plan of the STL Optimizer for sequence with avoidance leaves the arena")
+    s.notes = ("The STL Optimizer removes the prior and optimizes robustness directly. It descends "
+               "the violation penalty with a smoothness penalty and a velocity limit. It satisfies every requirement "
+               "class on every run. On sequence with avoidance every one of its plans leaves "
                "the arena, at a median largest coordinate of 10.27 against a half-width of 5.0. The "
                "excursion lies at steps 31 to 63, which no reach window covers. Deleting the avoidance "
-               "conjuncts leaves the plans outside the arena, so the avoidance conjuncts do not cause the excursion. Plans that "
-               "use the prior cross the arena edge in at most 4 of 100 runs, by at most 0.10. "
+               "conjuncts leaves the plans outside the arena, so the avoidance conjuncts do not cause the excursion. Its "
+               "plans also leave the arena on sequence. "
+               "Plans that use the prior cross the arena edge in at most 4 of 100 runs per class, by a small margin. "
                "[§5.1.3; §5.2.2; §6.1; app:noobs-ablation]")
     out.append(s)
+
 
     # the formal result, illustrated
     s = content("Underdetermination by robustness", "Results")
@@ -1038,41 +1031,14 @@ def slides():
     s.add(video(s, mp4, poster, *fit(poster, 7.45, TOP, 5.23, 3.95), "STL-FM plan executed in the cube task"),
           click=0, play=12700)
     s.add(label(s, 7.45, 6.06, 5.23, 0.28, "STL-FM plan, executed", size=13, align="ctr"))
-    claim(s, "STL-FM completes 10 of 30 executions, the requirement-only optimizer none (Fisher exact test, "
-          "p = 0.0008)")
+    claim(s, "STL-FM completes 10 of 30 executions, the STL Optimizer none")
     s.notes = ("OGBench single cube. The prior generates the effector and the cube position over 128 steps, so "
                "the requirement and the environment's success criterion refer to the same cube. Place is a "
                "4 cm ball about the target, the environment's own tolerance; pick holds when the effector is "
                "within 5 cm of the cube. [Click to play] A proportional controller tracks the effector and a "
-               "gripper state machine follows the plan. STL-FM completes 10 of 30 runs, the requirement-only "
-               "optimizer none, Fisher exact test p = 0.0008. The endpoint-inpaint planner completes 1. "
+               "gripper state machine follows the plan. STL-FM completes 10 of 30 runs, the STL "
+               "Optimizer none. The endpoint-inpaint planner completes 1. "
                "[§5.3, tab:closedloop]")
-    out.append(s)
-
-    # cube: no contact without the prior
-    s = content("Carry gap", "Results")
-    for k, (key, cap) in enumerate([("stlonly", "Requirement-only, planned"), ("guided", "STL-FM, planned")]):
-        img = pdf_png(f"OGBench/cube_sequence_{key}.pdf")
-        x0 = CX + 3.85 * k
-        s.add(label(s, x0, 2.10, 3.65, 0.32, cap, size=15, color=PINK if k == 0 else BLUE, bold=True,
-                    align="ctr"))
-        s.add(picture(s, img, *fit(img, x0, 2.45, 3.65, 3.58), f"Planned effector and cube paths, {cap}"),
-              is_sp=False)
-    mp4, poster = HERE / "cube_reqonly_june.mp4", HERE / "cube_reqonly_june_poster.png"
-    s.add(video(s, mp4, poster, *fit(poster, 8.45, 2.10, 4.23, 3.92), "Requirement-only plan executed"),
-          click=0, play=13200)
-    s.add(label(s, 8.45, 6.06, 4.23, 0.28, "Requirement-only plan, executed", size=13, align="ctr"))
-    s.add(label(s, CX, 6.06, 7.50, 0.28, "Pooled median carry gap, 12.5 cm for the requirement-only optimizer and "
-                "6.9 cm for STL-FM", size=12, align="ctr"))
-    claim(s, "Without the prior, the planned cube moves without contact")
-    s.notes = ("The carry gap is the mean distance between the effector and the cube over the steps in which the "
-               "planned cube moves. Planned effector paths are solid and planned cube paths dashed, sequence class, all ten runs. The "
-               "requirement-only plans satisfy the requirement at the largest margin the place predicate admits, "
-               "+0.40. The planned cube crosses the table in near-straight lines while the planned effector "
-               "departs upward. [Click to play] Executed, the arm never reaches the cube. Carry gap 12.5 cm "
-               "against 6.9 cm for STL-FM, Mann-Whitney p < 1e-6. The requirement has no clause that the cube "
-               "moves only when carried. The prior provides that property, because no demonstration contains a cube moving "
-               "without contact. [§5.3, fig:closedloop-sequence, §6.1]")
     out.append(s)
 
     # cube: logic versus task
@@ -1098,10 +1064,10 @@ def slides():
         ("RQ2", PINK, "Does the robustness score alone determine a trajectory?",
          "The robustness score alone does not determine a trajectory. Its gradient depends on at most m waypoints, "
          "and its maximizers are unbounded where only avoidance applies. Without the "
-         "prior, plans for the two sequence classes leave the arena, and the planned cube moves without contact."),
+         "prior, plans for the sequencing requirements leave the arena, and the planned cube moves without contact."),
         ("Method", CYAN, "STL-FM guides the learned prior at one constant strength, without retraining",
-         "STL-FM satisfies the requirement at rates of 0.78 to 1.00 across the six navigation classes and completes "
-         "10 of 30 cube executions, against none for the requirement-only optimizer."),
+         "STL-FM satisfies the dwell, sequence and avoidance requirements at rates of 0.78 to 1.00 per class and "
+         "completes 10 of 30 cube executions, against none for the STL Optimizer."),
     ]
     for i, (tag, col, q, a) in enumerate(answers):
         callout(s, CX, 2.08 + 1.34 * i, CW, 1.22, tag, ([(q, {"bold": True})], a), col, size=15)
@@ -1123,8 +1089,7 @@ def slides():
     items = [("A differentiable dynamics model", "so that a requirement can constrain contact and object pose"),
              ("Execution on the physical platform", "plans for the GoFA door task, executed and scored on the robot"),
              ("A sweep of a requirement’s parameters", "the same prior under changed windows and dwell times"),
-             ("A barrier-filtered controller for execution", "for an execution-time guarantee"),
-             ("An evaluation of disjunction and until", "both are compiled but not yet evaluated")]
+             ("A barrier-filtered controller for execution", "for an execution-time guarantee")]
     for i, (head, line) in enumerate(items):
         y = 2.15 + 0.88 * i
         s.add(label(s, CX, y, 0.45, 0.36, f"{i + 1}.", size=17, color=INK, bold=True))
@@ -1140,8 +1105,7 @@ def slides():
                "of the physical study: the GoFA prior is trained and the requirement compiled, but no plan has been "
                "executed. Third, a sweep of a requirement's own parameters with the prior held fixed, such as the "
                "open time or the dwell, which tests adaptation without retraining directly. Fourth, a "
-               "barrier-filtered controller paired with the planner, for an execution-time guarantee. Fifth, an "
-               "evaluation of disjunction and until. [§7.2; §2.6]")
+               "barrier-filtered controller paired with the planner, for an execution-time guarantee. [§7.2; §2.6]")
     out.append(s)
 
     # end
@@ -1267,7 +1231,7 @@ def slides():
         "The second half of RQ2. Pure safety has no maximizer. With a reach conjunct the maximizers exist but are "
         "unbounded at time indices covered only by avoidance. In neither case does the requirement bound the "
         "trajectory. Control-synthesis formulations obtain the bound from the dynamics and costs, or conjoin a "
-        "boundedness clause (Lindemann and Dimarogonas 2019). If asked about the requirement-only optimizer: it "
+        "boundedness clause (Lindemann and Dimarogonas 2019). If asked about the STL Optimizer: it "
         "minimizes the violation penalty rather than ascending the score, so for it the result says only that no "
         "term of the requirement returns those coordinates to any region. [App. A, prop:no-maximizer, "
         "rem:violation-penalty; §2.2]"))
@@ -1356,18 +1320,128 @@ def slides():
         "The sampler in full. The predicted endpoint, the penalized requirement gradient, masking and "
         "normalization, the constant-strength update and the re-pinned start state are the steps of the "
         "guided-sampler slide. The optional clamp is off in all reported runs. [§4.7, alg:guided-ode]"))
+
+    # reproducing the STL Optimizer
+    s = content("Reproducing the STL Optimizer",
+                subtitle="Removes the learned prior and optimizes the robustness score directly, instead of "
+                         "sampling from a trained generative model",
+                backup=True)
+    steps = [
+        ("Controls, not states", "A free control sequence u, one 2D step per time index, starts from small "
+         "random noise"),
+        ("Single-integrator dynamics", "p[t+1] = p[t] + u[t]·Δt turns the controls into the trajectory that "
+         "gets scored"),
+        ("Same compiled score", "The requirement is scored by the masked, differentiable ρφ that STL-FM's "
+         "guidance also uses (stljax / STLCG++)"),
+        ("Violation objective, no prior", "Plain gradient descent on max(0, −ρφ); a finite-difference "
+         "smoothness penalty and a velocity limit stand in for a learned prior"),
+        ("Budget", "1,500–6,000 gradient steps, with the smoothing sharpness annealed from soft to sharp"),
+    ]
+    for r, (head, line) in enumerate(steps):
+        y = 2.40 + 0.70 * r
+        s.add(label(s, 0.70, y, 3.30, 0.66, head, size=16, color=INK, bold=True, anchor="ctr"))
+        s.add(label(s, 4.10, y, 8.58, 0.66, line, size=15, color=INK, anchor="ctr"))
+    s.add(label(s, CX, 6.30, CW, 0.55,
+                "The robustness engine is shared with STL-FM; the optimization built around it, single-integrator "
+                "dynamics and the violation penalty, is a standard direct-optimization baseline, not something "
+                "STLCG++ itself proposes.", size=14))
+    s.notes = ("How the STL Optimizer is actually computed, since it is named for what it scores rather than for "
+               "how it works. Controls "
+               "for a single integrator start as small random noise and are integrated into a trajectory at every "
+               "gradient step, p of t plus 1 equals p of t plus u of t times delta t. That trajectory is scored by "
+               "the same masked, differentiable robustness construction that stljax slash STLCG plus plus "
+               "provides, and that STL-FM's own guidance term uses at every one of its integration steps. What "
+               "differs is the objective: plain gradient descent on the violation penalty, max of zero and minus "
+               "rho, with a hand-specified finite-difference smoothness penalty and a velocity limit taking the "
+               "place of a learned prior, run for 1,500 to 6,000 steps with the log-sum-exp temperature annealed "
+               "from soft to sharp. STLCG++ supplies the differentiable score; it does not propose this "
+               "optimization design, which follows standard direct STL trajectory optimization "
+               "(Belta and Vasile 2020). [§5.1.3]")
+    out.append(s)
+
     out.append(crop_slide("Navigation results, all four planners", ["bk_tab_openloop", "bk_tab_anytime"],
                "The upper table gives satisfaction and mean robustness over 100 runs, and a star marks entries whose "
                "plans all leave the arena. Classes 1 to 6 are reach, nested reach-and-dwell, recurrence, sequence, "
-               "sequence with avoidance and composite. The lower table gives when each planner first satisfies the "
-               "requirement and when it reaches its best robustness, and the wall-clock plan time. STL-FM with "
-               "endpoint pin differs from STL-FM by at most 0.05. [tab:openloop, tab:anytime; tab:families]",
+               "sequence with avoidance and composite, and classes 7 to 10 are choice of target, choice of sequence, "
+               "ordered visit and avoidance until reach. The lower table gives, per class, when each planner first "
+               "satisfies the requirement and when it reaches its best robustness, as percentages of its budget, and "
+               "the wall-clock plan time in seconds. STL-FM with endpoint pin differs from STL-FM by at most 0.05 on "
+               "classes 1 to 6. [tab:openloop, tab:anytime; tab:families]",
                stack=True))
+
+    # disjunction and until, classes 7 to 10 (not in the report the examiner received)
+    s = content("Disjunction and until in navigation", backup=True)
+    extra = [("choice", "Choice of target", "◇μ₁ ∨ ◇μ₂"), ("choiceseq", "Choice of sequence", "(◇μ₁ ∧ ◇μ₃) ∨ (◇μ₂ ∧ ◇μ₃)"),
+             ("ordered", "Ordered visit", "(¬μ₂ U μ₁) ∧ ◇μ₂"), ("avoiduntil", "Avoidance until reach", "(¬μ₃ ∧ ¬μ₄) U μ₁")]
+    for k, (key, name, form) in enumerate(extra):
+        img = pdf_png(OL.format(f"{key}_guided"))
+        x0 = CX + 3.03 * k
+        s.add(label(s, x0, 2.00, 2.90, 0.28, name, size=13, color=INK, bold=True, align="ctr"))
+        s.add(label(s, x0, 2.28, 2.90, 0.26, form, size=12, color=INK, align="ctr"))
+        s.add(picture(s, img, *fit(img, x0 + 0.35, 2.56, 2.20, 1.85), f"STL-FM plans, {name}"), is_sp=False)
+    cols = [("Class", 2.30, "l"), ("Endpoint-inpaint", 1.55, "ctr"), ("STL-FM", 1.30, "ctr"),
+            ("STL-FM with pin", 1.55, "ctr"), ("STL Optimizer", 1.65, "ctr"), ("Plan time, STL-FM", 1.80, "ctr"),
+            ("Plan time, STL Optimizer", 1.87, "ctr")]
+    rows = [("Choice of target", "0.18", "0.98", "0.97", "0.98", "0.54 s", "23.02 s"),
+            ("Choice of sequence", "0.02", "0.96", "0.94", "1.00†", "0.75 s", "22.92 s"),
+            ("Ordered visit", "0.05", "0.27", "0.96", "0.00†", "5.72 s", "–"),
+            ("Avoidance until reach", "0.03", "0.97", "0.98", "1.00†", "4.69 s", "32.03 s")]
+    xs = [CX]
+    for _, w, _a in cols[:-1]:
+        xs.append(xs[-1] + w)
+    y = 4.52
+    for (h, w, al), x in zip(cols, xs):
+        s.add(label(s, x, y, w, 0.30, h, size=12, color=INK, bold=True, align=al))
+    s.add(rule(s, CX, CX + sum(c[1] for c in cols), y + 0.33))
+    for i, row in enumerate(rows):
+        yy = y + 0.40 + 0.31 * i
+        for (h, w, al), x, v in zip(cols, xs, row):
+            s.add(label(s, x, yy, w, 0.30, v, size=12, color=INK, align=al))
+    s.add(rule(s, CX, CX + sum(c[1] for c in cols), y + 0.40 + 0.31 * 4 + 0.02))
+    s.add(label(s, CX, 6.30, CW, 0.30, "Satisfaction over 100 runs, and plan time as a median over satisfying timing runs. "
+                "† every plan leaves the arena. The STL Optimizer fails ordered visit at a local optimum "
+                "of its objective", size=12, color=MUTED))
+    s.notes = ("Added after the report: four navigation classes that use disjunction, choice of target and choice of "
+               "sequence, and until, ordered visit and avoidance until reach, instantiated in the scene of the "
+               "composite class. Panels show STL-FM, 25 of 100 runs. Under STL-FM the satisfied branch of a "
+               "disjunction varies between runs. On choice of target 52 plans reach the distant target and 54 the "
+               "near one, and on choice of sequence 14 take the branch through the first target and 84 the shorter "
+               "branch, whereas the STL Optimizer always takes the branch through the near target. On "
+               "ordered visit the first target lies 7.95 world units from the start and the second only 1.96, and the "
+               "until operator forbids entering the second before the first. The STL Optimizer enters the "
+               "near target first in every run. It fails at a local optimum and not because the instance is "
+               "infeasible: the reach conjunct for the second target attains its value at an early waypoint near it, "
+               "where its gradient is opposite to that of the until conjunct. Started from a plan that visits the "
+               "first target first, it satisfies the instance, and with the second target's window moved to steps 31 "
+               "to 63 it satisfies 19 of 20 runs. STL-FM satisfies 0.27 of runs, and STL-FM with endpoint pin 0.96, "
+               "because the pinned final state satisfies the reach conjunct at the final index. The plan time of "
+               "STL-FM on the two until classes, 4.7 and 5.7 s against 0.42 to 1.15 s elsewhere, is attributed to the "
+               "compiled until, which is evaluated once for every end index of its window. Over all ten classes the "
+               "estimated time to first satisfaction is 0.10 to 2.56 s for STL-FM and 0.83 to 7.29 s for the "
+               "optimizer, excluding ordered visit. [§5.2.1, tab:openloop; §5.2.3, tab:anytime; app:ordered-visit, "
+               "tab:ordered-visit; tab:families]")
+    out.append(s)
+
+    s = content("Robustness against budget", backup=True)
+    for k, (key, name) in enumerate(classes):
+        img = pdf_png(f"2D/anytime_{key}.pdf")
+        col, row_ = k % 5, k // 5
+        x0, y0 = CX + 2.42 * col, 2.05 + 2.30 * row_
+        s.add(label(s, x0, y0, 2.32, 0.30, name, size=12, color=INK, bold=True, align="ctr"))
+        s.add(picture(s, img, *fit(img, x0, y0 + 0.30, 2.32, 1.95), f"Robustness against budget, {name}"),
+              is_sp=False)
+    s.notes = ("Robustness against progress through each planner's own budget, one panel per class, as the median "
+               "over 100 runs with an interquartile band. The step axis is normalized per planner, so the comparison "
+               "is of shape and not of cost. The dashed line is the satisfaction threshold. STL-FM reaches its "
+               "largest robustness at 95 to 100 percent of its budget on the five history-dependent classes of the "
+               "fragment, and the STL Optimizer at 10 to 57 percent on the classes it satisfies. "
+               "[fig:anytime, fig:anytime-ext]")
+    out.append(s)
     out.append(crop_slide("Cube results, all three classes", ["bk_tab_closedloop"],
                "In the table, sat is logic satisfaction on the plan, task is success on the rollout, and gap is the "
-               "mean carry gap. Classes 2, 4 and 5 are nested reach-and-dwell, sequence and sequence with avoidance. "
-               "The pooled gap row reads 0.64, 0.69 and 1.25 although the class rows are in centimetres. The pooled "
-               "medians quoted in the talk are 12.5 and 6.9 cm. [tab:closedloop; tab:families]"))
+               "median carry gap in centimetres. Classes 2, 4 and 5 are nested reach-and-dwell, sequence and sequence "
+               "with avoidance. The pooled row gives the medians quoted in the talk, 12.5 cm for the STL "
+               "Optimizer and 6.9 cm for STL-FM. [tab:closedloop; tab:families]"))
 
     # kitchen
     s = content("Kitchen study", backup=True)
@@ -1386,7 +1460,7 @@ def slides():
                "Two priors, complete-v2 and mixed, and two planners, the unguided prior and STL-FM, 20 runs each. Under "
                "complete-v2 every plan satisfies the requirement under both planners, because the demonstrations "
                "operate the fixtures in the required order, so guidance performs no selection. Under mixed, 6 of 20 "
-               "without and 2 of 20 with guidance, Fisher p = 0.235, no effect detected. No execution satisfies the "
+               "without and 2 of 20 with guidance, no effect detected. No execution satisfies the "
                "requirement: the planned microwave crosses the threshold in every complete-v2 plan, the executed one "
                "in none. The prior generates the state, not the actions that produce it. [§5.4, tab:kitchen, §6.2]")
     out.append(s)
@@ -1419,7 +1493,7 @@ def slides():
     rows = [("Demonstrations", "0.6°", "2 %"), ("Unguided prior, start pinned", "6.4°", "4 %"),
             ("Unguided prior, both endpoints pinned", "8.2°", "7 %"),
             ("STL-FM, nested reach-and-dwell", "30.9°", "47 %"), ("STL-FM, recurrence", "9.9°", ""),
-            ("STL-FM, composite", "", "18.5 %"), ("Requirement-only optimizer, pooled", "0.3°", "")]
+            ("STL-FM, composite", "", "18.5 %"), ("STL Optimizer, pooled", "0.3°", "")]
     cx = [0.70, 6.20, 8.60]; cw = [5.3, 2.2, 2.2]
     for x, w, h in zip(cx, cw, ["Trajectories", "Median turn angle", "Turns above 90°"]):
         s.add(label(s, x, 2.12, w, 0.32, h, size=14, align="l" if x < 1 else "ctr"))
@@ -1437,7 +1511,7 @@ def slides():
     s.notes = ("Moving steps are steps longer than 0.05 world units. The prior does not reproduce the smoothness of its "
                "demonstrations, and guidance raises the turn angle on nested reach-and-dwell, where nearly half the "
                "turns exceed a right angle. On sequence and sequence with avoidance the guided plans are no rougher than "
-               "the prior. The requirement-only optimizer is smoother than the demonstrations because of its "
+               "the prior. The STL Optimizer is smoother than the demonstrations because of its "
                "hand-specified smoothness penalty. Two explanations remain open, and the evaluation does not "
                "distinguish them. The evidence for the contribution of the prior is the cube carry gap and the navigation "
                "excursion. [§5.2, §6.1]")
@@ -1448,7 +1522,6 @@ def slides():
     lims = [("Fixed requirement instances", "every rate is measured on one instance per class"),
             ("No certificate", "the guided sampler is a soft realization, so it gives a rate, not a guarantee"),
             ("Sampled-state semantics", "robustness does not constrain the path between two sampled states"),
-            ("Evaluated fragment", "disjunction and until are compiled but not evaluated, and the fragment has no unbounded operators"),
             ("Requirement-neutral prior", "a modelling assumption, although demonstrations can retain task structure"),
             ("Reproducibility", "runs with identical seeds agree on the satisfaction count in 27 of 28 cells and differ by one run in the other"),
             ("Physical carry interval", "a proxy read from the gripper trace, longer than the planning horizon")]

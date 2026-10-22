@@ -1,0 +1,333 @@
+<title>STL, Robustness, Smoothness, Compilation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* layout: a vertical spine of four numbered stages, each a card with a lead
+   paragraph, a formula callout, and a one-line takeaway; compilation stage
+   additionally gets a left-to-right pipeline diagram */
+:root{
+  --bg:#f6f4ef;
+  --surface:#ffffff;
+  --fg:#242220;
+  --muted:#6b6660;
+  --border:#e3ddd2;
+  --accent:#1f4e4a;
+  --accent-soft:#e4efec;
+  --flag:#9a5b2e;
+  --flag-soft:#f3e7da;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181a;
+    --surface:#1c2022;
+    --fg:#e8e4dc;
+    --muted:#9a948b;
+    --border:#30363a;
+    --accent:#7fc9bd;
+    --accent-soft:#1e2d2b;
+    --flag:#e0a876;
+    --flag-soft:#2b241c;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181a;
+  --surface:#1c2022;
+  --fg:#e8e4dc;
+  --muted:#9a948b;
+  --border:#30363a;
+  --accent:#7fc9bd;
+  --accent-soft:#1e2d2b;
+  --flag:#e0a876;
+  --flag-soft:#2b241c;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--serif);
+  font-size:16px;
+  line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:40px 80px;
+}
+.page{max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:28px}
+
+.masthead{display:flex; flex-direction:column; gap:6px; margin-bottom:8px}
+.masthead .kicker{
+  font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--accent); font-weight:600;
+}
+.masthead h1{
+  font-size:clamp(28px,5vw,38px); margin:0; font-weight:700; text-wrap:balance; letter-spacing:-.01em;
+}
+.masthead p{margin:4px 0 0; color:var(--muted); font-size:15px; max-width:56ch}
+
+.stage{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:24px clamp(18px,4vw,30px);
+  display:flex; flex-direction:column; gap:14px;
+  min-width:0;
+}
+.stage-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+.stage-num{
+  font-family:var(--mono); font-weight:600; color:var(--accent);
+  background:var(--accent-soft); border-radius:999px; padding:2px 11px; font-size:13px;
+  flex:none;
+}
+.stage-head h2{margin:0; font-size:21px; font-weight:700; letter-spacing:-.005em}
+
+.lede{margin:0; max-width:64ch}
+.lede b{font-weight:600}
+
+.box{
+  background:var(--accent-soft);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 18px;
+  overflow-x:auto;
+  min-width:0;
+}
+.box .label{
+  font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--muted); margin-bottom:6px; display:block;
+}
+
+table.rules{width:100%; border-collapse:collapse; font-size:14.5px}
+table.rules td{padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle}
+table.rules td:first-child{font-family:var(--mono); color:var(--fg); white-space:nowrap; width:1%; font-size:14px}
+table.rules tr:last-child td{border-bottom:none}
+
+.math{font-family:var(--mono); font-size:14.5px}
+.math-block{font-family:var(--mono); font-size:14.5px; line-height:2.1; overflow-x:auto}
+.math-block .row{white-space:nowrap}
+sub,sup{font-size:.7em}
+
+.take{
+  display:flex; gap:10px; align-items:flex-start;
+  font-size:14.5px; color:var(--fg);
+  border-top:1px dashed var(--border); padding-top:12px; margin-top:4px;
+}
+.take .pin{
+  font-family:var(--mono); font-size:11px; color:var(--flag); background:var(--flag-soft);
+  border-radius:6px; padding:1px 7px; flex:none; font-weight:600; letter-spacing:.03em;
+}
+.take span.text{color:var(--muted)}
+.take b{color:var(--fg); font-weight:600}
+
+/* compilation pipeline */
+.pipeline{
+  display:flex; align-items:stretch; gap:0; overflow-x:auto; padding:6px 2px 10px;
+  min-width:0;
+}
+.pipe-step{
+  flex:1 1 150px; min-width:130px;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; display:flex; flex-direction:column; gap:4px;
+}
+.pipe-step .t{font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:.06em}
+.pipe-step .d{font-size:13px; color:var(--muted); line-height:1.4}
+.pipe-arrow{
+  flex:none; display:flex; align-items:center; justify-content:center; width:28px;
+  color:var(--muted); font-size:18px;
+}
+
+.split{display:flex; gap:16px; flex-wrap:wrap}
+.split > div{flex:1 1 220px; min-width:0}
+.split h4{margin:0 0 4px; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em}
+
+footer{color:var(--muted); font-size:12.5px; text-align:center; padding-top:10px}
+footer code{font-family:var(--mono)}
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div class="kicker">Preliminaries · four stages</div>
+    <h1>From a requirement to a gradient</h1>
+    <p>How a Signal Temporal Logic formula becomes a number, how that number becomes differentiable, and how the whole construction is built from the formula automatically.</p>
+  </div>
+
+  <!-- STAGE 1 — STL -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">1</span>
+      <h2>STL — a language for requirements</h2>
+    </div>
+    <p class="lede">A requirement is written as a formula built from <b>real-valued predicates</b> on the state, Boolean connectives, and two temporal operators restricted to a <b>bounded window</b> <span id="m-window"></span>.</p>
+
+    <div class="box">
+      <span class="label">Syntax</span>
+      <div id="m-syntax"></div>
+    </div>
+
+    <table class="rules">
+      <tr><td id="m-mu"></td><td>a predicate — some function of the state crosses zero, for example a clearance or a distance to a goal</td></tr>
+      <tr><td id="m-event"></td><td><b>eventually</b> — the child formula holds at some time in the window</td></tr>
+      <tr><td id="m-always"></td><td><b>always</b> — the child formula holds at every time in the window</td></tr>
+      <tr><td id="m-until"></td><td><b>until</b> — the first child holds continuously until the second becomes true</td></tr>
+    </table>
+
+    <div class="take">
+      <span class="pin">note</span>
+      <span class="text">The Boolean semantics only say yes or no — a trajectory either satisfies the formula or it does not, with nothing in between.</span>
+    </div>
+  </section>
+
+  <!-- STAGE 2 — ROBUSTNESS -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">2</span>
+      <h2>Robustness — a graded margin</h2>
+    </div>
+    <p class="lede">Robustness replaces the true/false answer with a <b>signed real number</b>. The sign still tells you satisfaction; the magnitude now tells you <i>by how much</i>.</p>
+
+    <div class="box">
+      <span class="label">Recursive definition, by structure of the formula</span>
+      <div id="m-rob"></div>
+    </div>
+
+    <div class="box">
+      <span class="label">Soundness — the property everything else depends on</span>
+      <div id="m-sound"></div>
+    </div>
+
+    <div class="take">
+      <span class="pin">why</span>
+      <span class="text">Once satisfaction is a <b>number</b> instead of a bit, a planner can push on it with a gradient. A truth value gives no direction to move in; a margin does.</span>
+    </div>
+  </section>
+
+  <!-- STAGE 3 — SMOOTHNESS -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">3</span>
+      <h2>Smoothness — making the margin differentiable</h2>
+    </div>
+    <p class="lede">Exact <span id="m-minmax"></span> are continuous but not differentiable everywhere, and where they are differentiable, the gradient flows through only <b>one</b> argument at a time — the rest of the trajectory gets no signal. Each <span id="m-minmax2"></span> is replaced by a smooth surrogate with a sharpness knob <span id="m-kappa"></span>.</p>
+
+    <div class="box">
+      <span class="label">Log-sum-exp surrogate</span>
+      <div id="m-lse"></div>
+    </div>
+
+    <div class="split">
+      <div>
+        <h4>Small κ</h4>
+        <p style="margin:0;font-size:14px;color:var(--muted)">Gradient spreads across many timesteps. Score is far from exact.</p>
+      </div>
+      <div>
+        <h4>Large κ</h4>
+        <p style="margin:0;font-size:14px;color:var(--muted)">Score approaches the exact one. Gradient concentrates on one timestep again.</p>
+      </div>
+    </div>
+
+    <div class="box">
+      <span class="label">Cost of smoothing — a bounded bias, not unlimited slack</span>
+      <div id="m-bias"></div>
+    </div>
+
+    <div class="take">
+      <span class="pin">rule</span>
+      <span class="text">Guide the sampler with the <b>smoothed</b> score (it has a usable gradient). Decide satisfaction with the <b>exact</b> score (it is actually sound).</span>
+    </div>
+  </section>
+
+  <!-- STAGE 4 — COMPILATION -->
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-num">4</span>
+      <h2>Compilation — formula to tensor graph</h2>
+    </div>
+    <p class="lede">The robustness definition is <b>structurally recursive</b> — it recurses one-for-one over the formula's syntax tree. Compilation runs that same recursion as a program, so building the score is mechanical and needs no case-by-case design.</p>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <span class="t">formula φ</span>
+        <span class="d">a syntax tree of predicates, connectives, Eventually / Always / Until</span>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <span class="t">post-order walk</span>
+        <span class="d">visit each node bottom-up; one case per connective / operator</span>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <span class="t">tensor expression</span>
+        <span class="d">each node emits min / max (smoothed) over the trajectory tensor</span>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <span class="t">ρ<sub>φ</sub>(τ) + gradient</span>
+        <span class="d">a differentiable score; autodiff supplies ∇<sub>τ</sub>ρ<sub>φ</sub> for free</span>
+      </div>
+    </div>
+
+    <div class="box">
+      <span class="label">What happens at each node</span>
+      <table class="rules" style="font-size:13.5px">
+        <tr><td id="c-mu"></td><td>per-timestep margin <span id="c-mu-val"></span></td></tr>
+        <tr><td id="c-and"></td><td>smoothed min of the two children</td></tr>
+        <tr><td id="c-event"></td><td>smoothed max over the window</td></tr>
+        <tr><td id="c-always"></td><td>smoothed min over the window</td></tr>
+      </table>
+    </div>
+
+    <div class="take">
+      <span class="pin">key point</span>
+      <span class="text">This happens at <b>inference time</b>, with no learned component. A new requirement is a new syntax tree — the planner is never retrained to impose it.</span>
+    </div>
+  </section>
+
+  <footer>Built from Sections 3.3–4.2 of the thesis · <code>stljax</code> / STLCG++ evaluates the compiled graph</footer>
+</div>
+
+<script>
+function set(id, html, block){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className += block ? " math-block" : " math";
+  el.innerHTML = html;
+}
+
+set("m-window", "[a, b]");
+set("m-syntax", "φ ::= μ &nbsp;|&nbsp; ¬φ &nbsp;|&nbsp; φ₁∧φ₂ &nbsp;|&nbsp; φ₁∨φ₂ &nbsp;|&nbsp; ◇<sub>[a,b]</sub>φ &nbsp;|&nbsp; □<sub>[a,b]</sub>φ &nbsp;|&nbsp; φ₁ U<sub>[a,b]</sub> φ₂", true);
+set("m-mu", "μ := (h(x) ≥ 0)");
+set("m-event", "◇<sub>[a,b]</sub>φ");
+set("m-always", "□<sub>[a,b]</sub>φ");
+set("m-until", "φ₁ U<sub>[a,b]</sub> φ₂");
+
+set("m-rob",
+  '<div class="row">ρ(μ, x, t) &nbsp;=&nbsp; h(x(t))</div>' +
+  '<div class="row">ρ(¬φ, x, t) &nbsp;=&nbsp; −ρ(φ, x, t)</div>' +
+  '<div class="row">ρ(φ₁∧φ₂, x, t) &nbsp;=&nbsp; min( ρ(φ₁,x,t), ρ(φ₂,x,t) )</div>' +
+  '<div class="row">ρ(◇<sub>[a,b]</sub>φ, x, t) &nbsp;=&nbsp; max<sub>t′∈[t+a,t+b]</sub> ρ(φ, x, t′)</div>' +
+  '<div class="row">ρ(□<sub>[a,b]</sub>φ, x, t) &nbsp;=&nbsp; min<sub>t′∈[t+a,t+b]</sub> ρ(φ, x, t′)</div>'
+, true);
+
+set("m-sound", '<div class="row">ρ(φ, x, t) &gt; 0 &nbsp;⟹&nbsp; (x,t) ⊨ φ</div><div class="row" style="color:var(--muted)">and dually&nbsp; ρ(φ, x, t) &lt; 0 &nbsp;⟹&nbsp; (x,t) ⊭ φ</div>', true);
+
+set("m-minmax", "min / max"); set("m-minmax2", "min / max"); set("m-kappa", "κ");
+
+set("m-lse",
+  '<div class="row">smax<sub>κ</sub>(z₁,…,zₙ) &nbsp;=&nbsp; (1/κ) log Σᵢ e^(κzᵢ)</div>' +
+  '<div class="row">smin<sub>κ</sub>(z) &nbsp;=&nbsp; −smax<sub>κ</sub>(−z)</div>' +
+  '<div class="row" style="color:var(--muted)">κ → ∞ &nbsp;⟹&nbsp; smax<sub>κ</sub> → max</div>'
+, true);
+
+set("m-bias", '<div class="row">max<sub>i</sub> zᵢ &nbsp;≤&nbsp; smax<sub>κ</sub>(z) &nbsp;≤&nbsp; max<sub>i</sub> zᵢ + (log n)/κ</div>', true);
+
+set("c-mu", "μ = (h(x) ≥ 0)");
+set("c-mu-val", "h(proj<sup>pos</sup>(τ))");
+set("c-and", "φ₁ ∧ φ₂");
+set("c-event", "◇<sub>[a,b]</sub>φ₁");
+set("c-always", "□<sub>[a,b]</sub>φ₁");
+</script>

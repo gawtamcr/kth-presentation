@@ -1,0 +1,464 @@
+<title>Robustness Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* layout: one trajectory (8 sliders, one per timestep, driving a number-line
+   plot with region bands A / B / O) feeds three downstream panels — the
+   smax over the reach-A window, the smax over the reach-B window, and the
+   smin over the whole-horizon avoid window — which a final panel combines
+   with one more smin into the formula's overall score */
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --fg:#242220; --muted:#6b6660; --border:#e3ddd2;
+  --accent:#1f4e4a; --accent-soft:#e4efec; --flag:#9a5b2e; --flag-soft:#f3e7da;
+  --blue:#2a5c86; --blue-soft:#e3ecf3;
+  --pos:#1f6e4a; --pos-soft:#e3efe6; --neg:#a13e2c; --neg-soft:#f6e4de;
+  --mono:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+    --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+    --blue:#7fb2e0; --blue-soft:#1e2733;
+    --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+  --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+  --blue:#7fb2e0; --blue-soft:#1e2733;
+  --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--serif); font-size:16px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:36px 72px;
+}
+.page{max-width:820px; margin:0 auto; display:flex; flex-direction:column; gap:24px}
+.masthead{display:flex; flex-direction:column; gap:5px}
+.masthead .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600}
+.masthead h1{font-size:clamp(26px,5vw,34px); margin:0; font-weight:700; letter-spacing:-.01em}
+.masthead p{margin:4px 0 0; color:var(--muted); font-size:14.5px; max-width:62ch}
+
+.panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px clamp(16px,4vw,28px); display:flex; flex-direction:column; gap:16px; min-width:0}
+.panel-head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.panel-tag{font-family:var(--mono); font-weight:600; color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:2px 11px; font-size:12.5px; flex:none}
+.panel-head h2{margin:0; font-size:19px; font-weight:700}
+.panel p.lede{margin:0; color:var(--muted); font-size:14px; max-width:64ch}
+
+/* trajectory plot */
+.plot-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--accent-soft); padding:8px}
+svg#traj{display:block; min-width:640px}
+.band-label{font-family:var(--mono); font-size:11px; font-weight:600}
+.pt-label{font-family:var(--mono); font-size:10.5px; fill:var(--muted)}
+
+.sliders{display:grid; grid-template-columns:repeat(auto-fit, minmax(74px,1fr)); gap:10px 12px}
+.slider-item{display:flex; flex-direction:column; gap:5px; min-width:0}
+.slider-item label{display:flex; flex-direction:column; gap:1px; font-family:var(--mono); font-size:11.5px; color:var(--muted)}
+.slider-item label b{color:var(--fg); font-variant-numeric:tabular-nums; font-size:12.5px}
+.slider-item input[type=range]{width:100%; accent-color:var(--accent)}
+.kappa-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:14px}
+.kappa-row label{font-family:var(--mono); font-size:13px; color:var(--muted); display:flex; gap:8px; align-items:center}
+.kappa-row input[type=range]{width:220px; accent-color:var(--flag)}
+.kappa-row b{color:var(--fg); font-variant-numeric:tabular-nums}
+
+.calc{overflow-x:auto; border:1px solid var(--border); border-radius:10px}
+table.calc-table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:13px; min-width:460px}
+table.calc-table th{text-align:right; font-weight:600; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; padding:7px 9px; border-bottom:1px solid var(--border); background:var(--accent-soft)}
+table.calc-table th:first-child, table.calc-table td:first-child{text-align:left}
+table.calc-table td{text-align:right; padding:5px 9px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums}
+table.calc-table tr:last-child td{border-bottom:none}
+table.calc-table td.hi{color:var(--accent); font-weight:600}
+
+.steps{display:flex; flex-direction:column; gap:5px; font-family:var(--mono); font-size:13px; background:var(--accent-soft); border-radius:10px; padding:12px 14px; overflow-x:auto}
+.steps .s{white-space:nowrap}
+.steps .s .op{color:var(--muted)}
+
+.result-row{display:flex; gap:12px; flex-wrap:wrap}
+.result{flex:1 1 140px; border:1px solid var(--border); border-radius:10px; padding:11px 13px; display:flex; flex-direction:column; gap:3px; min-width:0}
+.result .k{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+.result .v{font-family:var(--mono); font-size:20px; font-weight:600; font-variant-numeric:tabular-nums}
+.result.pos{background:var(--pos-soft)} .result.pos .v{color:var(--pos)}
+.result.neg{background:var(--neg-soft)} .result.neg .v{color:var(--neg)}
+.result.flat .v{color:var(--fg)}
+.result.blue{background:var(--blue-soft)} .result.blue .v{color:var(--blue)}
+
+.bias-line{font-size:12.5px; color:var(--muted); font-family:var(--mono)}
+.bias-line b{color:var(--fg)}
+
+.take{display:flex; gap:10px; align-items:flex-start; font-size:14px; border-top:1px dashed var(--border); padding-top:12px}
+.take .pin{font-family:var(--mono); font-size:11px; color:var(--flag); background:var(--flag-soft); border-radius:6px; padding:1px 7px; flex:none; font-weight:600}
+.take span.text{color:var(--muted)}
+.take b{color:var(--fg)}
+
+.pipe{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:var(--mono); font-size:13px; color:var(--muted)}
+.pipe b{color:var(--fg)}
+
+footer{color:var(--muted); font-size:12px; text-align:center; padding-top:4px}
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div class="kicker">Worked example · move the sliders</div>
+    <h1>One trajectory, scored end to end</h1>
+    <p>Eight states, one requirement: <code>◇<sub>[0,3]</sub>A ∧ ◇<sub>[4,7]</sub>B ∧ □<sub>[0,7]</sub>¬O</code> — reach A in the first four steps, then reach B in the last four, while never sitting inside the obstacle O. Drag a state and every number below it updates.</p>
+  </div>
+
+  <!-- TRAJECTORY -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">traj</span>
+      <h2>The trajectory</h2>
+    </div>
+    <p class="lede">A one-dimensional position <code>x</code>, one value per timestep t=0…7. The bands are the regions: teal is A, blue is B, orange is the obstacle O. Because the trajectory is a <b>discrete</b> sequence of states, it can skip over O entirely between two timesteps without ever being penalized for it — nothing requires it to visit the states in between.</p>
+    <div class="plot-wrap"><svg id="traj" width="760" height="130" viewBox="0 0 760 130"></svg></div>
+    <div class="sliders" id="sliders-traj"></div>
+  </section>
+
+  <!-- WINDOW A -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">1</span>
+      <h2>Reach-A window, t=0…3 — smooth max</h2>
+    </div>
+    <p class="lede">Margin at each timestep: <code>h_A(x) = r_A − |x − c_A|</code>, positive inside A. The clause score is the smoothed max of these four margins.</p>
+    <div class="calc"><table class="calc-table" id="table-a"></table></div>
+    <div class="steps" id="steps-a"></div>
+    <div class="result-row">
+      <div class="result flat"><span class="k">exact max</span><span class="v" id="a-exact"></span></div>
+      <div class="result flat"><span class="k">ρ(◇A), smoothed</span><span class="v" id="a-smooth"></span></div>
+    </div>
+  </section>
+
+  <!-- WINDOW B -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">2</span>
+      <h2>Reach-B window, t=4…7 — smooth max</h2>
+    </div>
+    <p class="lede">Same recursion, same window size, the other region: <code>h_B(x) = r_B − |x − c_B|</code>.</p>
+    <div class="calc"><table class="calc-table" id="table-b"></table></div>
+    <div class="steps" id="steps-b"></div>
+    <div class="result-row">
+      <div class="result flat"><span class="k">exact max</span><span class="v" id="b-exact"></span></div>
+      <div class="result flat"><span class="k">ρ(◇B), smoothed</span><span class="v" id="b-smooth"></span></div>
+    </div>
+  </section>
+
+  <!-- AVOID WINDOW -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">3</span>
+      <h2>Avoid-O window, t=0…7 — smooth min</h2>
+    </div>
+    <p class="lede">Clearance at each of all eight timesteps: <code>h_avoid(x) = |x − c_O| − r_O</code>, positive means outside O. The clause score is the smoothed <b>min</b> of these eight clearances — one close pass drags the whole clause down.</p>
+    <div class="calc"><table class="calc-table" id="table-o"></table></div>
+    <div class="steps" id="steps-o"></div>
+    <div class="result-row">
+      <div class="result flat"><span class="k">exact min</span><span class="v" id="o-exact"></span></div>
+      <div class="result flat"><span class="k">ρ(□¬O), smoothed</span><span class="v" id="o-smooth"></span></div>
+    </div>
+  </section>
+
+  <!-- COMBINE -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">4</span>
+      <h2>Combine the three clauses — smooth min</h2>
+    </div>
+    <p class="lede">The top-level <code>∧</code> is one more smoothed min, now over the three clause scores computed above.</p>
+    <div class="pipe">ρ(◇A) = <b id="pipe-a"></b> &nbsp;∧&nbsp; ρ(◇B) = <b id="pipe-b"></b> &nbsp;∧&nbsp; ρ(□¬O) = <b id="pipe-o"></b></div>
+    <div class="calc"><table class="calc-table" id="table-f"></table></div>
+    <div class="steps" id="steps-f"></div>
+    <div class="result-row">
+      <div class="result flat"><span class="k">exact ρ(φ)</span><span class="v" id="f-exact"></span></div>
+      <div class="result blue"><span class="k">smoothed ρ(φ)</span><span class="v" id="f-smooth"></span></div>
+      <div class="result" id="f-sat-box"><span class="k">satisfies φ?</span><span class="v" id="f-sat"></span></div>
+    </div>
+    <div class="bias-line" id="f-bound-line"></div>
+
+    <div class="kappa-row">
+      <label>sharpness κ (shared by all four smoothing steps) <b id="kappa-val"></b>
+        <input type="range" id="kappa" min="0.5" max="12" step="0.1" value="4">
+      </label>
+    </div>
+
+    <div class="take"><span class="pin">read this as</span><span class="text">The <b>exact</b> score decides satisfaction for certain. The <b>smoothed</b> score is what a gradient-based sampler actually climbs — drag κ down and watch it pull away from the exact score at every one of the four smoothing steps above; drag it up and all four converge back onto the exact min/max.</span></div>
+  </section>
+
+  <!-- FLOW TIME -->
+  <section class="panel">
+    <div class="panel-head">
+      <span class="panel-tag">flow</span>
+      <h2>Scored while it is still forming — not after</h2>
+    </div>
+    <p class="lede">The score above is not computed once, on the finished trajectory. It is computed at every step of generation, on the sampler's <b>predicted endpoint</b> <code>τ̂(s)</code> — its running guess of the finished trajectory, re-estimated as flow time <code>s</code> goes from 0 (pure noise) to 1 (the trajectory you built above). Step through it.</p>
+
+    <div class="plot-wrap"><svg id="traj-flow" width="760" height="130" viewBox="0 0 760 130"></svg></div>
+
+    <div class="result-row">
+      <div class="result flat"><span class="k">flow time s</span><span class="v" id="flow-s"></span></div>
+      <div class="result" id="flow-sat-box"><span class="k">exact ρ(φ)(τ̂(s))</span><span class="v" id="flow-rho"></span></div>
+    </div>
+
+    <div class="controls" style="display:flex; gap:8px; flex-wrap:wrap">
+      <button class="primary right" id="btn-flow-step">Step one s</button>
+      <button id="btn-flow-play">Play to s=1</button>
+      <button id="btn-flow-reset">Reset to noise</button>
+    </div>
+
+    <div class="steps" id="flow-log"><div class="s" style="color:var(--muted)">press step or play — each row is one gradient evaluation during generation</div></div>
+
+    <div class="take"><span class="pin">the point</span><span class="text">At <code>s=0</code> the guess is close to pure noise and <code>ρ(φ)</code> is whatever it is — meaningless to act on. By <code>s=1</code>, <code>τ̂(s)</code> is exactly the trajectory from the panels above. Every row in between is one real step of the sampler: a score and a gradient evaluated on a trajectory that is still only a rough guess, which is exactly why the thesis evaluates the requirement at <code>τ̂(s)</code> — an extrapolated, already-plausible-looking estimate — rather than at the raw noisy iterate.</span></div>
+  </section>
+
+  <footer>smax<sub>κ</sub>(z) = (1/κ)·log Σᵢ e^(κzᵢ) &nbsp;·&nbsp; smin<sub>κ</sub>(z) = −smax<sub>κ</sub>(−z)</footer>
+</div>
+
+<script>
+function fmt(x){ return (Math.round(x*1000)/1000).toFixed(3); }
+
+// ---- world geometry (1D line, domain [-2, 14]) ----
+const DOMAIN = [-2, 14];
+const REGION_A = {c:2, r:1.5, color:"var(--accent)", label:"A"};
+const REGION_B = {c:10, r:1.5, color:"var(--blue)", label:"B"};
+const REGION_O = {c:6, r:1.3, color:"var(--flag)", label:"O (avoid)"};
+const N = 8;
+const defaults = [2, 2.6, 2.2, 3.3, 8.6, 9.6, 10.3, 10.6];
+
+function xToPx(x, width){
+  return ((x - DOMAIN[0]) / (DOMAIN[1]-DOMAIN[0])) * width;
+}
+
+function buildSliders(){
+  const wrap = document.getElementById("sliders-traj");
+  wrap.innerHTML = "";
+  for(let i=0;i<N;i++){
+    const item = document.createElement("div");
+    item.className = "slider-item";
+    const label = document.createElement("label");
+    const name = document.createElement("span");
+    name.textContent = "t="+i;
+    const val = document.createElement("b");
+    val.id = "x"+i+"-val";
+    label.appendChild(name); label.appendChild(val);
+    const input = document.createElement("input");
+    input.type="range"; input.id="x"+i; input.min=DOMAIN[0]; input.max=DOMAIN[1]; input.step=0.1; input.value=defaults[i];
+    input.addEventListener("input", recomputeAll);
+    item.appendChild(label); item.appendChild(input);
+    wrap.appendChild(item);
+  }
+}
+buildSliders();
+
+document.getElementById("kappa").addEventListener("input", recomputeAll);
+
+function drawPlot(xs){ drawPlotTo("traj", xs); }
+
+function drawPlotTo(svgId, xs){
+  const svg = document.getElementById(svgId);
+  const W = 760, H = 130;
+  const bandY = 30, bandH = 46;
+  let html = "";
+
+  [REGION_A, REGION_O, REGION_B].forEach(reg => {
+    const x0 = xToPx(reg.c-reg.r, W), x1 = xToPx(reg.c+reg.r, W);
+    html += `<rect x="${x0}" y="${bandY}" width="${x1-x0}" height="${bandH}" fill="${reg.color}" opacity="0.22" rx="6"></rect>`;
+    html += `<text x="${(x0+x1)/2}" y="${bandY-7}" text-anchor="middle" class="band-label" fill="${reg.color}">${reg.label}</text>`;
+  });
+
+  html += `<line x1="0" y1="${bandY+bandH/2}" x2="${W}" y2="${bandY+bandH/2}" stroke="var(--border)" stroke-width="1"></line>`;
+
+  for(let i=0;i<N-1;i++){
+    const x0 = xToPx(xs[i], W), x1 = xToPx(xs[i+1], W);
+    html += `<line x1="${x0}" y1="${bandY+bandH/2}" x2="${x1}" y2="${bandY+bandH/2}" stroke="var(--fg)" stroke-width="1.4" opacity="0.5"></line>`;
+  }
+  for(let i=0;i<N;i++){
+    const px = xToPx(xs[i], W);
+    const py = bandY+bandH/2;
+    const inWindowA = i<=3, col = inWindowA ? "var(--accent)" : "var(--blue)";
+    html += `<circle cx="${px}" cy="${py}" r="7" fill="var(--surface)" stroke="${col}" stroke-width="2.4"></circle>`;
+    html += `<text x="${px}" y="${bandY+bandH+16}" text-anchor="middle" class="pt-label">t${i}</text>`;
+  }
+  svg.innerHTML = html;
+}
+
+function smax(zs, k){
+  const kz = zs.map(v=>k*v);
+  const ex = kz.map(v=>Math.exp(v));
+  const sum = ex.reduce((a,b)=>a+b,0);
+  const logSum = Math.log(sum);
+  return {val: logSum/k, kz, ex, sum, logSum};
+}
+
+function fillTable(id, headCols, rowLabels, z, kz, ex, sumLabel, sum){
+  const tbl = document.getElementById(id);
+  let rows = `<tr>${headCols.map(h=>`<th>${h}</th>`).join("")}</tr>`;
+  for(let i=0;i<z.length;i++){
+    rows += `<tr><td>${rowLabels[i]}</td><td>${fmt(z[i])}</td><td>${fmt(kz[i])}</td><td>${fmt(ex[i])}</td></tr>`;
+  }
+  rows += `<tr><td colspan="3">${sumLabel}</td><td class="hi">${fmt(sum)}</td></tr>`;
+  tbl.innerHTML = rows;
+}
+
+function recomputeAll(){
+  const xs = [];
+  for(let i=0;i<N;i++){
+    const v = parseFloat(document.getElementById("x"+i).value);
+    xs.push(v);
+    document.getElementById("x"+i+"-val").textContent = fmt(v);
+  }
+  const k = parseFloat(document.getElementById("kappa").value);
+  document.getElementById("kappa-val").textContent = fmt(k);
+
+  drawPlot(xs);
+
+  // ---- clause A: t=0..3, h_A = rA - |x-cA|
+  const idxA = [0,1,2,3];
+  const zA = idxA.map(i => REGION_A.r - Math.abs(xs[i]-REGION_A.c));
+  const sA = smax(zA, k);
+  fillTable("table-a", ["t","z","κ·z","e^(κ·z)"], idxA.map(i=>"t="+i), zA, sA.kz, sA.ex, "Σ e^(κ·z)", sA.sum);
+  document.getElementById("steps-a").innerHTML =
+    `<div class="s"><span class="op">log(Σ)/κ =</span> log(${fmt(sA.sum)}) / ${fmt(k)} = <b>${fmt(sA.val)}</b></div>`;
+  const exactA = Math.max(...zA);
+  document.getElementById("a-exact").textContent = fmt(exactA);
+  document.getElementById("a-smooth").textContent = fmt(sA.val);
+
+  // ---- clause B: t=4..7, h_B = rB - |x-cB|
+  const idxB = [4,5,6,7];
+  const zB = idxB.map(i => REGION_B.r - Math.abs(xs[i]-REGION_B.c));
+  const sB = smax(zB, k);
+  fillTable("table-b", ["t","z","κ·z","e^(κ·z)"], idxB.map(i=>"t="+i), zB, sB.kz, sB.ex, "Σ e^(κ·z)", sB.sum);
+  document.getElementById("steps-b").innerHTML =
+    `<div class="s"><span class="op">log(Σ)/κ =</span> log(${fmt(sB.sum)}) / ${fmt(k)} = <b>${fmt(sB.val)}</b></div>`;
+  const exactB = Math.max(...zB);
+  document.getElementById("b-exact").textContent = fmt(exactB);
+  document.getElementById("b-smooth").textContent = fmt(sB.val);
+
+  // ---- avoid: t=0..7, h_avoid = |x-cO| - rO, smin = -smax(-z)
+  const idxO = [0,1,2,3,4,5,6,7];
+  const zO = idxO.map(i => Math.abs(xs[i]-REGION_O.c) - REGION_O.r);
+  const negO = zO.map(v=>-v);
+  const sO = smax(negO, k);
+  const sminO = -sO.val;
+  fillTable("table-o", ["t","z","κ·(−z)","e^(κ·(−z))"], idxO.map(i=>"t="+i), zO, sO.kz, sO.ex, "Σ e^(κ·(−z))", sO.sum);
+  document.getElementById("steps-o").innerHTML =
+    `<div class="s"><span class="op">log(Σ)/κ =</span> log(${fmt(sO.sum)}) / ${fmt(k)} = ${fmt(sO.val)} <span class="op">(= smax(−z))</span></div>` +
+    `<div class="s"><span class="op">negate =</span> −(${fmt(sO.val)}) = <b>${fmt(sminO)}</b></div>`;
+  const exactO = Math.min(...zO);
+  document.getElementById("o-exact").textContent = fmt(exactO);
+  document.getElementById("o-smooth").textContent = fmt(sminO);
+
+  // ---- combine: smin over [rhoA, rhoB, rhoO] (smoothed clause scores)
+  const rhoA = sA.val, rhoB = sB.val, rhoO = sminO;
+  document.getElementById("pipe-a").textContent = fmt(rhoA);
+  document.getElementById("pipe-b").textContent = fmt(rhoB);
+  document.getElementById("pipe-o").textContent = fmt(rhoO);
+
+  const clause = [rhoA, rhoB, rhoO];
+  const negC = clause.map(v=>-v);
+  const sF = smax(negC, k);
+  const sminF = -sF.val;
+  fillTable("table-f", ["clause","z","κ·(−z)","e^(κ·(−z))"], ["◇A","◇B","□¬O"], clause, sF.kz, sF.ex, "Σ e^(κ·(−z))", sF.sum);
+  document.getElementById("steps-f").innerHTML =
+    `<div class="s"><span class="op">log(Σ)/κ =</span> log(${fmt(sF.sum)}) / ${fmt(k)} = ${fmt(sF.val)} <span class="op">(= smax(−z))</span></div>` +
+    `<div class="s"><span class="op">negate =</span> −(${fmt(sF.val)}) = <b>${fmt(sminF)}</b></div>`;
+
+  const exactF = Math.min(...clause);
+  document.getElementById("f-exact").textContent = fmt(exactF);
+  document.getElementById("f-smooth").textContent = fmt(sminF);
+
+  const satBox = document.getElementById("f-sat-box");
+  const satText = document.getElementById("f-sat");
+  satBox.className = "result " + (exactF > 0 ? "pos" : "neg");
+  satText.textContent = exactF > 0 ? "yes" : "no";
+
+  const n = 3;
+  const bound = Math.log(n)/k;
+  document.getElementById("f-bound-line").innerHTML =
+    `Bias bound <b>log(n)/κ</b> with n=3 clauses: <b>${fmt(bound)}</b> — a smoothed score above this value would certify satisfaction on its own; here it is <b>${fmt(sminF)}</b>.`;
+}
+
+recomputeAll();
+
+// ---------- Flow-time panel: predicted endpoint across generation ----------
+const NOISE_START = [-1.5, 11.2, 3.5, -0.5, 1.8, 9.0, 4.5, 13.5]; // fixed "Gaussian sample" tau0
+const JITTER = [0.9, -1.1, 0.6, -0.8, 1.0, -0.6, 0.8, -0.5]; // shrinks as s -> 1
+const FLOW_K = 8;
+let flowStep = 0;
+let flowTimer = null;
+
+function finalXs(){
+  const xs = [];
+  for(let i=0;i<N;i++) xs.push(parseFloat(document.getElementById("x"+i).value));
+  return xs;
+}
+
+function hatTau(s){
+  const xs1 = finalXs();
+  const out = [];
+  for(let i=0;i<N;i++){
+    const base = (1-s)*NOISE_START[i] + s*xs1[i];
+    out.push(base + JITTER[i]*(1-s));
+  }
+  return out;
+}
+
+function exactRhoOf(xs){
+  const idxA = [0,1,2,3], idxB = [4,5,6,7], idxO = [0,1,2,3,4,5,6,7];
+  const zA = idxA.map(i => REGION_A.r - Math.abs(xs[i]-REGION_A.c));
+  const zB = idxB.map(i => REGION_B.r - Math.abs(xs[i]-REGION_B.c));
+  const zO = idxO.map(i => Math.abs(xs[i]-REGION_O.c) - REGION_O.r);
+  const rhoA = Math.max(...zA), rhoB = Math.max(...zB), rhoO = Math.min(...zO);
+  return Math.min(rhoA, rhoB, rhoO);
+}
+
+function renderFlow(){
+  const s = flowStep / FLOW_K;
+  const xs = hatTau(s);
+  drawPlotTo("traj-flow", xs);
+  const rho = exactRhoOf(xs);
+  document.getElementById("flow-s").textContent = fmt(s);
+  const box = document.getElementById("flow-sat-box");
+  const val = document.getElementById("flow-rho");
+  val.textContent = fmt(rho);
+  box.className = "result " + (rho > 0 ? "pos" : "neg");
+  document.getElementById("btn-flow-step").disabled = flowStep >= FLOW_K;
+  document.getElementById("btn-flow-play").disabled = flowStep >= FLOW_K;
+}
+
+function stepFlow(){
+  if(flowStep > FLOW_K) return;
+  renderFlow();
+  const s = flowStep / FLOW_K;
+  const rho = exactRhoOf(hatTau(s));
+  const log = document.getElementById("flow-log");
+  if(flowStep === 0) log.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "s";
+  row.innerHTML = `s=${fmt(s)} &nbsp;<span class="op">→</span>&nbsp; ρ(φ)(τ̂(s)) = <b style="color:${rho>0?'var(--pos)':'var(--neg)'}">${fmt(rho)}</b>${flowStep===FLOW_K ? '  <span class="op">(= the trajectory above)</span>' : ''}`;
+  log.appendChild(row);
+  flowStep += 1;
+}
+
+document.getElementById("btn-flow-step").addEventListener("click", stepFlow);
+document.getElementById("btn-flow-play").addEventListener("click", ()=>{
+  clearInterval(flowTimer);
+  flowTimer = setInterval(()=>{
+    if(flowStep > FLOW_K){ clearInterval(flowTimer); return; }
+    stepFlow();
+  }, 500);
+});
+document.getElementById("btn-flow-reset").addEventListener("click", ()=>{
+  clearInterval(flowTimer); flowTimer = null;
+  flowStep = 0;
+  document.getElementById("flow-log").innerHTML = '<div class="s" style="color:var(--muted)">press step or play — each row is one gradient evaluation during generation</div>';
+  renderFlow();
+});
+
+renderFlow();
+</script>

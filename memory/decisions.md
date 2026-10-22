@@ -69,11 +69,13 @@ Each decision with its reason, in the order made. Later decisions override earli
   does not separate the planners; evidence for the prior is the arena excursion (median
   largest coordinate 10.27 vs half-width 5.0, at steps 31–63) and the cube carry gap, not smoothness.
 - Cube (OGBench single cube, 10 runs × 3 classes): requirement-only 30/30 satisfied, 0/30
-  completed; STL-FM 20/30 satisfied, 10/30 completed (Fisher p = 0.0008); endpoint-inpaint
+  completed; STL-FM 20/30 satisfied, 10/30 completed; endpoint-inpaint
   1/30, 1/30. STL-FM's completions come mostly from nested reach-and-dwell (logic 1/10, task
   9/10); on sequence 10/10 logic, 1/10 task. Message: logic satisfaction and task success
   each occur without the other.
-- Pooled median carry gap 12.5 cm (requirement-only) vs 6.9 cm (STL-FM), Mann–Whitney p < 1e-6.
+- Pooled median carry gap 12.5 cm (requirement-only) vs 6.9 cm (STL-FM).
+- No significance tests (author, 2026-10-21): the Fisher and Mann–Whitney tests were removed from
+  the thesis and the deck. Counts and medians are quoted without p-values.
 - "One prior serves six requirement classes" — not a claim that adaptation to a changed
   parameter was tested (that sweep is future work, §7.2).
 - Planner names follow the thesis: endpoint-inpaint planner, STL-FM, STL-FM with endpoint
@@ -175,3 +177,57 @@ The main on-slide changes:
 - Results tables (46–47): the **crops are kept**. They carry no explicit pointer, only the
   thesis class numbers and planner letters; the notes give the class names. Rejected: native
   tables with names.
+
+## Thesis sync (2026-10-22)
+- The thesis now has ten navigation classes (7–10 use disjunction and until). Author's choices:
+  slides 26 and 27 extended to all ten classes (no new slide for 7–10); a new results slide 29,
+  "Ordered visit", because the abstract reports that the requirement-only optimizer fails it at
+  a local optimum; RQ1/RQ2 kept in the deck although the thesis now states an aim and
+  contributions; the arena-edge margin of prior-based plans is given without a number, because
+  the thesis says 0.13 in §5.2.2 and 0.10 in §6.1.
+- Text synced to the thesis: the fragment line (slide 11), the endpoint-pin note limited to
+  classes 1–6 (slide 24), the conclusions' rate scope and "sequencing requirements" (slide 34),
+  future-work item 5 and the fragment limitation (slides 35, 52), and the plan-time note as
+  per-class ranges (slide 27). Slide numbers from 29 on shifted by one.
+- Time analysis (author, 2026-10-22): a talk slide 28 "Time to satisfaction" (budget against
+  estimated seconds, claim from §5.2.3) and a backup slide 49 "Robustness against budget" (the
+  ten per-class curves); cube and kitchen plan times in the speaker notes only. Bars in seconds
+  come from ch5_ext_n100 section G, because the thesis prints only their ranges; no values are
+  printed on the bars. Later slides shifted again.
+- Disjunction and until in backup only (author, 2026-10-22): classes 7–10 were not in the report
+  given to the examiner. The talk shows classes 1–6 (slides 26–28 reverted to six classes, with
+  current thesis values) and does not mention disjunction or until: the fragment line, future-work
+  item 5 and the limitations row were removed. One consolidated backup slide 48, "Disjunction and
+  until in navigation", holds the four classes, their rates and plan times, and ordered visit; the
+  former ordered-visit talk slide was folded into it. The time slide prints six-class ranges
+  (0.10–1.07 s against 0.83–6.75 s), which the thesis does not print (author's choice).
+- Baseline renamed, deck only (author, 2026-10-22): "requirement-only optimizer" (the thesis's own
+  term) reads oddly spoken aloud, so the deck now calls it the "STL Optimizer" everywhere —
+  `assets/build_deck.py`, the three matplotlib legends in `assets/make_static_figs.py`
+  (`fig_nav_satisfaction`, `fig_cube_logic_task`, `fig_time_budget`, regenerated), and
+  `defence_script.md`. The thesis text itself is not touched (too large to revise now). First
+  mention, slide 24's planner table and its spoken notes, reads "STL Optimizer (no-prior)" so the
+  audience still gets the one property that distinguishes it from STL-FM; every later mention is
+  plain "STL Optimizer". New backup slide 47, "Reproducing the STL Optimizer" (bumping 47–54 to
+  48–55), states what the name doesn't: single-integrator controls, the same stljax/STLCG++ score
+  STL-FM's guidance uses, the violation-penalty objective with its hand-specified regularizers, and
+  the 1,500–6,000-step budget. Its closing line is deliberate: STLCG++ supplies the differentiable
+  score (§4.2, shared with STL-FM); the optimization design around it follows the general
+  direct-optimization literature the thesis itself cites (Belta and Vasile 2020, §5.1.3), not
+  something the STLCG++ paper proposes — worth keeping straight if asked, since the two are easy to
+  conflate.
+- Three talk slides cut (author, 2026-10-22, "don't add significant new info"): **Learned prior**
+  (Background, formerly 17; demonstrations beside unguided-prior samples), **Evaluation metrics**
+  (Results, formerly 25; the logic-satisfaction/task-success formulas and the fixed-instance
+  remark), and **Carry gap** (Results, formerly 32; the cube carry-gap figure and video, 12.5 cm
+  STL Optimizer vs. 6.9 cm STL-FM). Talk shrinks from 35 to 32 slides (1,410 s to 1,290 s, 23.5 to
+  21.5 min); backup shrinks from 37–55 (19 slides) to 34–52 (19 slides, since the STL-Optimizer
+  reproduction slide added the same day keeps the backup count even). Carry gap's one number not
+  already stated elsewhere moved to the Cube manipulation slide's notes and to backup slide 48's
+  table (Table 5.6); nothing else from the three slides survives on a talk slide. The
+  logic-satisfaction/task-success terms are still used from "Six requirement classes" onward
+  without a dedicated definition slide — worth a glance if the examiner asks for the precise
+  definition, since it is now only in speaker notes, not on screen. Every other talk and backup
+  slide renumbered down by one, two or three accordingly; `defence_script.md` and
+  `deck_summary.md` carry the new numbers.
+

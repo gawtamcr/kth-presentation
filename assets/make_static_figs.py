@@ -300,28 +300,31 @@ def fig_progression():
     save(fig, "fig_prog_3.png")
 
 
-# ── result charts, values from Table tab:openloop and Table tab:closedloop ──
-PLANNER_COL = {"Endpoint-inpaint": "#9a9a9a", "STL-FM": BLUE, "Requirement-only": PINK}
+# ── result charts, values from Table tab:openloop (ten classes, 2026-10-22) and Table tab:closedloop ──
+PLANNER_COL = {"Endpoint-inpaint": "#9a9a9a", "STL-FM": BLUE, "STL Optimizer": PINK}
 
 
 def fig_nav_satisfaction():
-    classes = ["Reach", "Nested reach-\nand-dwell", "Recurrence", "Sequence", "Sequence with\navoidance",
-               "Composite"]
-    vals = {"Endpoint-inpaint": [1.00, 0, 0, 0, 0, 0],
-            "STL-FM": [0.96, 1.00, 0.98, 0.89, 0.89, 0.78],
-            "Requirement-only": [1.00, 1.00, 1.00, 1.00, 1.00, 1.00]}
+    classes = ["Reach", "Nested\nreach-and-\ndwell", "Recurrence", "Sequence", "Sequence\nwith\navoidance",
+               "Composite", "Choice of\ntarget", "Choice of\nsequence", "Ordered\nvisit", "Avoidance\nuntil reach"]
+    vals = {"Endpoint-inpaint": [1.00, 0, 0, 0, 0, 0, 0.18, 0.02, 0.05, 0.03],
+            "STL-FM": [0.96, 1.00, 0.98, 0.89, 0.89, 0.78, 0.98, 0.96, 0.27, 0.97],
+            "STL Optimizer": [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 0.98, 1.00, 0.00, 1.00]}
+    leaves = (3, 4, 7, 8, 9)   # every plan of the STL Optimizer leaves the arena (star in tab:openloop)
+    # The talk shows classes 1-6 only; 7-10 (disjunction and until) were not in the report the examiner received.
+    classes = classes[:6]; vals = {k: v[:6] for k, v in vals.items()}; leaves = tuple(i for i in leaves if i < 6)
     fig, ax = plt.subplots(figsize=(12.4, 4.4))
-    fig.subplots_adjust(left=0.08, right=0.99, top=0.88, bottom=0.20)
-    x = np.arange(len(classes)); w = 0.26
+    fig.subplots_adjust(left=0.07, right=0.995, top=0.88, bottom=0.25)
+    x = np.arange(len(classes)); w = 0.27
     for k, (name, v) in enumerate(vals.items()):
         bars = ax.bar(x + (k - 1) * w, v, w * 0.92, color=PLANNER_COL[name], label=name)
         for i, (b, val) in enumerate(zip(bars, v)):
             txt = f"{val:.2f}"
-            if name == "Requirement-only" and i in (3, 4):
+            if name == "STL Optimizer" and i in leaves:
                 txt += "†"
             ax.text(b.get_x() + b.get_width() / 2, val + 0.02, txt, ha="center", va="bottom", fontsize=12,
                     color=PLANNER_COL[name])
-    ax.set_xticks(x); ax.set_xticklabels(classes, fontsize=15)
+    ax.set_xticks(x); ax.set_xticklabels(classes, fontsize=14)
     ax.set_ylim(0, 1.12); ax.set_yticks([0, 0.5, 1.0])
     ax.set_ylabel("logic satisfaction", fontsize=16)
     ax.spines[["top", "right"]].set_visible(False)
@@ -332,11 +335,45 @@ def fig_nav_satisfaction():
     plt.close(fig)
 
 
+def fig_time_budget():
+    """First satisfaction against budget and against wall-clock time, per navigation class.
+
+    Percentages: the 'first' columns of Table tab:anytime. Seconds: the per-class medians behind the
+    ranges of Section sec:results-anytime (CODE/flow-2d/outputs/ch5_ext_n100/ch5_numbers_ext.txt,
+    section G), whose extremes are the thesis's 0.10-2.56 s and 0.83-7.29 s. Ordered visit is left
+    out of the seconds, as in the thesis, and the optimizer has no satisfying run on it.
+    """
+    classes = ["Reach", "Nested\nreach-and-\ndwell", "Recurrence", "Sequence", "Sequence\nwith\navoidance",
+               "Composite", "Choice of\ntarget", "Choice of\nsequence", "Ordered\nvisit", "Avoidance\nuntil reach"]
+    pct = {"STL-FM": [30, 89, 84, 86, 83, 94, 37, 84, 83, 53],
+           "STL Optimizer": [15, 9, 4, 23, 20, 24, 26, 31, None, 22]}
+    sec = {"STL-FM": [0.098, 0.534, 0.534, 0.652, 0.677, 1.072, 0.214, 0.624, None, 2.559],
+           "STL Optimizer": [0.830, 1.001, 1.053, 3.162, 5.789, 6.747, 6.084, 7.027, None, 7.289]}
+    # The talk shows classes 1-6 only; 7-10 are in a backup slide.
+    classes = classes[:6]; pct = {k: v[:6] for k, v in pct.items()}; sec = {k: v[:6] for k, v in sec.items()}
+    fig, axes = plt.subplots(2, 1, figsize=(12.4, 4.1), sharex=True)
+    fig.subplots_adjust(left=0.075, right=0.995, top=0.89, bottom=0.24, hspace=0.25)
+    x = np.arange(len(classes)); w = 0.36
+    for ax, data, ylab, ymax in [(axes[0], pct, "% of budget", 100), (axes[1], sec, "seconds, estimated", 8)]:
+        for k, (name, v) in enumerate(data.items()):
+            xs = [xi + (k - 0.5) * w for xi, val in zip(x, v) if val is not None]
+            ax.bar(xs, [val for val in v if val is not None], w * 0.92, color=PLANNER_COL[name],
+                   label=name if ax is axes[0] else None)
+        ax.set_ylim(0, ymax * 1.08)
+        ax.set_ylabel(ylab, fontsize=14)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(axis="y", color="#e3e3e3", lw=0.8); ax.set_axisbelow(True)
+    axes[1].set_xticks(x); axes[1].set_xticklabels(classes, fontsize=14)
+    axes[0].legend(ncol=2, frameon=False, fontsize=14, loc="lower center", bbox_to_anchor=(0.5, 1.0))
+    fig.savefig(HERE / "fig_time_budget.png", dpi=300)
+    plt.close(fig)
+
+
 def fig_cube_logic_task():
     LOGIC, TASK = CYAN, "#7f9a1c"
     fig, axes = plt.subplots(1, 2, figsize=(12.4, 4.4), gridspec_kw={"width_ratios": [1, 1]})
     fig.subplots_adjust(left=0.07, right=0.99, top=0.84, bottom=0.14, wspace=0.18)
-    panels = [("Pooled, 30 runs per planner", ["Endpoint-inpaint", "STL-FM", "Requirement-only"],
+    panels = [("Pooled, 30 runs per planner", ["Endpoint-inpaint", "STL-FM", "STL Optimizer"],
                [(1, 1), (20, 10), (30, 0)], 30),
               ("STL-FM, 10 runs per class", ["Nested reach-\nand-dwell", "Sequence", "Sequence with\navoidance"],
                [(1, 9), (10, 1), (9, 0)], 10)]
@@ -367,6 +404,7 @@ if __name__ == "__main__":
     fig_sparse()
     fig_nav_satisfaction()
     fig_cube_logic_task()
+    fig_time_budget()
     fig_modes()
     fig_progression()
     print("wrote fig_robustness_cell, fig_robustness_gradient, fig_sparse_unbounded, fig_nav_satisfaction, "

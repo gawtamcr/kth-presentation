@@ -1,0 +1,326 @@
+<title>Recurrence vs Masking</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* layout: one shared signal strip at top feeds two side-by-side grids below —
+   left fills one diagonal of cells per step, backward, with a running memory
+   box (STLCG's recurrence); right reveals every cell's mask at once and takes
+   one column-max over the whole grid in a single step (STLCG++'s masking).
+   a step counter under each grid makes the 1-vs-N contrast the whole point. */
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --fg:#242220; --muted:#6b6660; --border:#e3ddd2;
+  --accent:#1f4e4a; --accent-soft:#e4efec; --flag:#9a5b2e; --flag-soft:#f3e7da;
+  --blue:#2a5c86; --blue-soft:#e3ecf3;
+  --pos:#1f6e4a; --pos-soft:#e3efe6; --neg:#a13e2c; --neg-soft:#f6e4de;
+  --mono:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+    --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+    --blue:#7fb2e0; --blue-soft:#1e2733;
+    --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181a; --surface:#1c2022; --fg:#e8e4dc; --muted:#9a948b; --border:#30363a;
+  --accent:#7fc9bd; --accent-soft:#1e2d2b; --flag:#e0a876; --flag-soft:#2b241c;
+  --blue:#7fb2e0; --blue-soft:#1e2733;
+  --pos:#74c79a; --pos-soft:#1c2a22; --neg:#e38a72; --neg-soft:#2c2019; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--serif); font-size:16px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:36px 72px;
+}
+.page{max-width:920px; margin:0 auto; display:flex; flex-direction:column; gap:24px}
+.masthead{display:flex; flex-direction:column; gap:5px}
+.masthead .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600}
+.masthead h1{font-size:clamp(26px,5vw,34px); margin:0; font-weight:700; letter-spacing:-.01em}
+.masthead p{margin:4px 0 0; color:var(--muted); font-size:14.5px; max-width:68ch}
+
+.panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px clamp(14px,4vw,26px); display:flex; flex-direction:column; gap:14px; min-width:0}
+
+.signal-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.signal-row .lbl{font-family:var(--mono); font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.signal-cells{display:flex; gap:6px; flex-wrap:wrap}
+.sig-cell{display:flex; flex-direction:column; align-items:center; gap:2px}
+.sig-cell input[type=range]{writing-mode:vertical-lr; direction:rtl; width:18px; height:54px; accent-color:var(--accent)}
+.sig-cell b{font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums}
+.sig-cell span{font-family:var(--mono); font-size:9.5px; color:var(--muted)}
+
+.k-row{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12.5px; color:var(--muted)}
+.k-row input[type=range]{width:160px; accent-color:var(--flag)}
+.k-row b{color:var(--fg)}
+
+.compare{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media (max-width:720px){ .compare{grid-template-columns:1fr} }
+
+.sub-panel{border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; min-width:0}
+.sub-panel.left{background:var(--flag-soft)}
+.sub-panel.right{background:var(--accent-soft)}
+.sub-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap}
+.sub-head h3{margin:0; font-size:15px; font-weight:700}
+.sub-head .tag{font-family:var(--mono); font-size:10.5px; color:var(--muted)}
+
+.grid-wrap{overflow-x:auto}
+table.grid{border-collapse:collapse; font-family:var(--mono); font-size:12px; margin:0 auto}
+table.grid td{
+  width:34px; height:30px; text-align:center; vertical-align:middle;
+  border:1px solid var(--border); font-variant-numeric:tabular-nums;
+  background:var(--surface); color:var(--muted); transition:background .15s, color .15s, opacity .15s;
+}
+table.grid td.rowhead{font-weight:600; color:var(--fg); background:transparent; border:none; width:28px}
+table.grid td.colhead{font-weight:600; color:var(--fg); background:transparent; border:none; height:20px}
+table.grid td.kept{background:var(--surface); color:var(--fg); font-weight:600}
+table.grid td.masked{opacity:.28}
+table.grid td.pad{opacity:.28; font-style:italic}
+table.grid td.active-l{outline:2px solid var(--flag); outline-offset:-2px}
+table.grid td.active-r{outline:2px solid var(--accent); outline-offset:-2px}
+table.grid tr.trace-row td{border-top:2px solid var(--fg); font-weight:700}
+table.grid tr.trace-row td.filled{color:var(--flag)}
+table.grid.right-grid tr.trace-row td.filled{color:var(--accent)}
+
+.controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+button{
+  font-family:var(--mono); font-size:12.5px; font-weight:600; border:1px solid var(--border);
+  background:var(--surface); color:var(--fg); border-radius:8px; padding:7px 13px; cursor:pointer;
+}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.4; cursor:default}
+button.primary.left{border-color:var(--flag); color:var(--flag)}
+button.primary.right{border-color:var(--accent); color:var(--accent)}
+
+.mem-box{
+  font-family:var(--mono); font-size:13px; border-radius:8px; padding:8px 12px;
+  background:var(--surface); border:1px solid var(--border); display:flex; justify-content:space-between; gap:10px;
+}
+.mem-box b{font-variant-numeric:tabular-nums}
+
+.stepcount{font-family:var(--mono); font-size:12px; color:var(--muted); display:flex; justify-content:space-between}
+.stepcount b{color:var(--fg); font-size:16px}
+
+.take{display:flex; gap:10px; align-items:flex-start; font-size:14px; border-top:1px dashed var(--border); padding-top:12px}
+.take .pin{font-family:var(--mono); font-size:11px; color:var(--flag); background:var(--flag-soft); border-radius:6px; padding:1px 7px; flex:none; font-weight:600}
+.take span.text{color:var(--muted)}
+.take b{color:var(--fg)}
+
+footer{color:var(--muted); font-size:12px; text-align:center; padding-top:4px}
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <div class="kicker">Side by side · press play</div>
+    <h1>One operator, two ways to compute it</h1>
+    <p>Both sides answer the same question — <code>◇</code>, "what's the best value in the next few steps" — for every starting time at once. The left walks backward one step at a time (STLCG). The right builds one grid, masks it, and takes one column-max (STLCG++).</p>
+  </div>
+
+  <section class="panel">
+    <div class="signal-row">
+      <span class="lbl">signal s</span>
+      <div class="signal-cells" id="signal-cells"></div>
+    </div>
+    <div class="k-row">
+      <label>look-ahead window K <b id="k-val"></b></label>
+      <input type="range" id="k-slider" min="1" max="3" step="1" value="2">
+    </div>
+
+    <div class="compare">
+      <div class="sub-panel left">
+        <div class="sub-head"><h3>Recurrent — STLCG</h3><span class="tag">walks backward, one t at a time</span></div>
+        <div class="grid-wrap"><table class="grid" id="grid-left"></table></div>
+        <div class="mem-box"><span>memory (running best)</span><b id="mem-val">—</b></div>
+        <div class="stepcount"><span>steps taken</span><b id="steps-left">0</b></div>
+        <div class="controls">
+          <button class="primary left" id="btn-step-left">Step back one t</button>
+          <button id="btn-play-left">Play all</button>
+          <button id="btn-reset-left">Reset</button>
+        </div>
+      </div>
+
+      <div class="sub-panel right">
+        <div class="sub-head"><h3>Masking — STLCG++</h3><span class="tag">one grid, one column-max</span></div>
+        <div class="grid-wrap"><table class="grid right-grid" id="grid-right"></table></div>
+        <div class="mem-box"><span>cells touched this step</span><b id="mask-count">—</b></div>
+        <div class="stepcount"><span>steps taken</span><b id="steps-right">0</b></div>
+        <div class="controls">
+          <button class="primary right" id="btn-compute-right">Compute all at once</button>
+          <button id="btn-reset-right">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="take"><span class="pin">watch</span><span class="text">Make the signal longer (drag more cells) and replay both — the left's step counter grows with the signal length; the right's never leaves <b>1</b>. Shaded cells are masked out (blanked before the max); italic cells are padding past the end of the signal.</span></div>
+  </section>
+
+  <footer>Trace = <code>max</code> of the kept cells in each column &nbsp;·&nbsp; same grid shape for every window size, only the mask changes</footer>
+</div>
+
+<script>
+const N = 6; // signal length
+let sVals = [1, 3, 5, 2, 4, 0];
+let K = 2;
+const PAD = "·"; // pad marker, treated as very negative
+
+function buildSignalSliders(){
+  const wrap = document.getElementById("signal-cells");
+  wrap.innerHTML = "";
+  sVals.forEach((v,i)=>{
+    const cell = document.createElement("div");
+    cell.className = "sig-cell";
+    const b = document.createElement("b"); b.textContent = v; b.id = "sv-"+i;
+    const input = document.createElement("input");
+    input.type="range"; input.min=-3; input.max=6; input.step=1; input.value=v;
+    input.addEventListener("input", e=>{ sVals[i]=parseInt(e.target.value); b.textContent=sVals[i]; resetAll(); });
+    const span = document.createElement("span"); span.textContent = "s"+i;
+    cell.appendChild(input); cell.appendChild(b); cell.appendChild(span);
+    wrap.appendChild(cell);
+  });
+}
+buildSignalSliders();
+
+document.getElementById("k-slider").addEventListener("input", e=>{
+  K = parseInt(e.target.value);
+  document.getElementById("k-val").textContent = K;
+  resetAll();
+});
+document.getElementById("k-val").textContent = K;
+
+// window for column t: indices [t, t+K-1], padded beyond N-1
+function windowIdx(t){
+  const idx = [];
+  for(let k=0;k<K;k++) idx.push(t+k);
+  return idx;
+}
+
+function cellLabel(i){ return i < N ? sVals[i] : PAD; }
+
+// ---------- LEFT: recurrent ----------
+let leftTrace = new Array(N).fill(null);
+let leftStep = 0; // number of columns filled so far, filling from t=N-1 down to 0
+let leftTimer = null;
+
+function renderLeftGrid(){
+  const rowsCount = N + K - 1;
+  const tbl = document.getElementById("grid-left");
+  let html = "<tr><td class='rowhead'></td>";
+  for(let t=0;t<N;t++) html += `<td class="colhead">t=${t}</td>`;
+  html += "</tr>";
+  for(let i=0;i<rowsCount;i++){
+    html += `<tr><td class="rowhead">s${i<N?i:""}${i>=N?PAD:""}</td>`;
+    for(let t=0;t<N;t++){
+      const win = windowIdx(t);
+      const inWin = win.includes(i);
+      const currentlyComputing = (t === N-1-leftStep) && leftStep < N;
+      let cls = inWin ? "kept" : "masked";
+      if(!inWin) cls = "masked";
+      if(inWin && currentlyComputing) cls += " active-l";
+      // only show kept styling for columns already computed or currently computing
+      const columnDone = t >= N - leftStep;
+      if(inWin && !columnDone && !currentlyComputing) cls = "masked";
+      html += `<td class="${cls}">${inWin ? (i<N?sVals[i]:PAD) : ""}</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "<tr class='trace-row'><td class='rowhead'>trace</td>";
+  for(let t=0;t<N;t++){
+    const done = t >= N - leftStep;
+    html += `<td class="${done?'filled':''}">${done && leftTrace[t]!==null ? leftTrace[t] : ""}</td>`;
+  }
+  html += "</tr>";
+  tbl.innerHTML = html;
+  document.getElementById("steps-left").textContent = leftStep;
+  document.getElementById("btn-step-left").disabled = leftStep >= N;
+  document.getElementById("btn-play-left").disabled = leftStep >= N;
+}
+
+function stepLeft(){
+  if(leftStep >= N) return;
+  const t = N - 1 - leftStep;
+  const win = windowIdx(t);
+  const vals = win.map(i => i<N ? sVals[i] : -1e5);
+  const best = Math.max(...vals);
+  leftTrace[t] = best;
+  leftStep += 1;
+  document.getElementById("mem-val").textContent = best;
+  renderLeftGrid();
+}
+
+function resetLeft(){
+  clearInterval(leftTimer); leftTimer=null;
+  leftTrace = new Array(N).fill(null);
+  leftStep = 0;
+  document.getElementById("mem-val").textContent = "—";
+  renderLeftGrid();
+}
+
+document.getElementById("btn-step-left").addEventListener("click", stepLeft);
+document.getElementById("btn-reset-left").addEventListener("click", resetLeft);
+document.getElementById("btn-play-left").addEventListener("click", ()=>{
+  clearInterval(leftTimer);
+  leftTimer = setInterval(()=>{
+    if(leftStep>=N){ clearInterval(leftTimer); return; }
+    stepLeft();
+  }, 550);
+});
+
+// ---------- RIGHT: masking ----------
+let rightComputed = false;
+
+function renderRightGrid(){
+  const rowsCount = N + K - 1;
+  const tbl = document.getElementById("grid-right");
+  let html = "<tr><td class='rowhead'></td>";
+  for(let t=0;t<N;t++) html += `<td class="colhead">t=${t}</td>`;
+  html += "</tr>";
+  let touched = 0;
+  for(let i=0;i<rowsCount;i++){
+    html += `<tr><td class="rowhead">s${i<N?i:""}${i>=N?PAD:""}</td>`;
+    for(let t=0;t<N;t++){
+      const win = windowIdx(t);
+      const inWin = win.includes(i);
+      if(inWin) touched++;
+      let cls = inWin ? "kept" : "masked";
+      if(rightComputed && inWin) cls += " active-r";
+      if(i>=N) cls += inWin ? " pad" : "";
+      html += `<td class="${cls}">${inWin ? (i<N?sVals[i]:PAD) : ""}</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "<tr class='trace-row'><td class='rowhead'>trace</td>";
+  for(let t=0;t<N;t++){
+    let val = "";
+    if(rightComputed){
+      const win = windowIdx(t);
+      const vals = win.map(i => i<N ? sVals[i] : -1e5);
+      val = Math.max(...vals);
+    }
+    html += `<td class="${rightComputed?'filled':''}">${val}</td>`;
+  }
+  html += "</tr>";
+  tbl.innerHTML = html;
+  document.getElementById("steps-right").textContent = rightComputed ? 1 : 0;
+  document.getElementById("mask-count").textContent = rightComputed ? touched + " (all)" : "—";
+}
+
+document.getElementById("btn-compute-right").addEventListener("click", ()=>{
+  rightComputed = true;
+  renderRightGrid();
+});
+document.getElementById("btn-reset-right").addEventListener("click", ()=>{
+  rightComputed = false;
+  renderRightGrid();
+});
+
+function resetAll(){
+  resetLeft();
+  rightComputed = false;
+  renderRightGrid();
+}
+
+resetAll();
+</script>

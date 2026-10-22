@@ -16,21 +16,32 @@ STL-Guided Flow Matching*.
 - The thesis is `OVERLEAF/kth-thesis/main_thesis.tex` (+ `appendix.tex`). Every slide claim
   must match it.
 
-## State on 2026-10-21
-`OVERLEAF/PPT/STL-FM Defense.pptx` has 51 slides, all built by script and checked in a
-PowerPoint render:
-- 1 cover, then Motivation 2–8, Background 9–19, Method 20–22, Results 23–32 and
-  Conclusions 33–34. Slide 35 is the KTH logo end slide.
-- Roadmap slides open each part: 9 requirement, 14 prior, 20 sampler, 23 plan and execution.
-- 36–51 are backup: the divider, plausible samples, five formal results in plain language,
-  constant guidance strength, compilation and the sampler in plain language, three tables,
-  kitchen, physical platform, roughness and limitations.
+## State on 2026-10-22
+`OVERLEAF/kth-presentation/STL-FM Defense.pptx` (the folder was `OVERLEAF/PPT` until 2026-10-21; paths below still say PPT)
+has 52 slides since the author trimmed three talk slides on 2026-10-22, all built by script and
+checked in a PowerPoint render:
+- 1 cover, then Motivation 2–8, Background 9–18, Method 19–21, Results 22–30 and
+  Conclusions 31–32. Slide 33 is the KTH logo end slide.
+- Roadmap slides open each part: 9 requirement, 14 prior, 19 sampler, 22 plan and execution.
+- 34–52 are backup: the divider, plausible samples, five formal results in plain language,
+  constant guidance strength, compilation and the sampler in plain language, how the "STL
+  Optimizer" baseline is actually reproduced, three tables, kitchen, physical platform, roughness
+  and limitations.
 - The slides are self-contained (author's request, 2026-10-21). No slide or spoken note names a
   thesis proposition, theorem, equation, algorithm, table, figure, section or chapter. Thesis
   sources stay only in the bracketed tag at the end of each note and in `defence_script.md`.
+- The baseline the thesis calls the "requirement-only optimizer" is named "STL Optimizer" in the
+  deck only (thesis text untouched, too large to revise now); first mention, slide 23's planner
+  table ("Experimental setup"), reads "STL Optimizer (no-prior)".
+- Three talk slides were removed 2026-10-22 (author: no significant new information) — Learned
+  prior (demonstrations beside unguided-prior samples), Evaluation metrics (the
+  logic-satisfaction/task-success formulas), and Carry gap (cube carry-gap figure and video). Their
+  content either survives elsewhere (carry gap: notes on the Cube manipulation slide and backup
+  table 5.6) or is cut outright (prior samples, the formal metric definitions). See
+  `decisions.md`, 2026-10-22, for the reasoning.
 
 The slide list with times is at the top of `OVERLEAF/PPT/defence_script.md`. Every slide has
-speaker notes. Rehearsal timing has not been done; the estimate is 22.7 min.
+speaker notes. Rehearsal timing has not been done; the estimate is 21.5 min.
 
 ## Files
 | Path | Role |
@@ -99,6 +110,12 @@ speaker notes. Rehearsal timing has not been done; the estimate is 22.7 min.
 - Media keep their asset file names. Avoid `imageN.png` names, which collide with template media.
 - The pptx skill scripts (`add_slide.py`, `clean.py`) come from `PPTX_SKILL` (default path
   hard-coded in `build_deck.py`).
+
+- `pdf_png` caches each thesis figure as `assets/<stem>.png`. Since 2026-10-22 it re-renders when the
+  thesis PDF is newer than the cached PNG; before that a changed figure never reached the deck.
+- `make_backup_crops.py` crops at fixed pages with anchor words. On 2026-10-22 the table pages were
+  76, 81 and 83, and the Table 5.5 anchor became "Req.-only", because the per-class table has no
+  "Planner" header. The proposition and algorithm entries are unused, and their pages were not updated.
 
 ## Environment quirks
 - **Figtree:** the template embeds only a subset of Figtree. PowerPoint drew text runs whose

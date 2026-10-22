@@ -29,8 +29,8 @@ ITEMS = [
     ("bk_alg_compile", 58, "rules", "Algorithm"),
     ("bk_alg_sampler", 66, "rules", "Guided"),
     ("bk_tab_openloop", 76, "rules", "Endpoint-inpaint"),
-    ("bk_tab_anytime", 79, "rules", "Planner"),
-    ("bk_tab_closedloop", 80, "rules", "Endpoint-inpaint"),
+    ("bk_tab_anytime", 81, "rules", "Req.-only"),
+    ("bk_tab_closedloop", 83, "rules", "Endpoint-inpaint"),
 ]
 
 
