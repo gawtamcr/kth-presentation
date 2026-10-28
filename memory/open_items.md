@@ -1,6 +1,14 @@
 # Open items (2026-10-21, after the KTH revision)
 
 ## Pending author review
+- **Slides 10–11 (2026-10-23, background condensing — see `decisions.md`):** "Evaluated fragment"
+  was deleted and folded into slide 10 as one line; "Quantitative robustness" and "Smooth
+  robustness" were merged into one slide, "Robustness", with a new figure `fig_robustness_1d.png`
+  and three equation blocks at reduced scale. Built and content-checked with `markitdown` in a
+  WSL session with no LibreOffice/PowerPoint. **Needs a PowerPoint render before the author
+  reviews it** — check specifically for cramped spacing or overflow between the three stacked
+  equations and the figure on slide 11, and whether the reduced equation sizes (effective
+  14–19 pt) read well at projector distance.
 - **Whole deck:** the KTH revision has been built and checked for layout in a PowerPoint
   render. The author has not yet reviewed it.
 - **Slide 18 (was 19 before the 2026-10-22 trim):** the comparison table is on trial. The author
@@ -45,7 +53,9 @@
   `make_math.py`.
 
 ## Possible next steps
-1. Author review of the KTH revision, and a decision on the trial table (slide 19).
-2. Install Figtree, then re-render and recheck the breaks.
-3. Rehearse and time; trim if over 22 minutes.
-4. Optionally re-render the cube videos from the final checkpoints for slides 31–32.
+1. Render the deck on Windows/PowerPoint and check slide 11 ("Robustness") for overflow or
+   cramped spacing, then author review of the 2026-10-23 background condensing.
+2. Author review of the KTH revision, and a decision on the trial table (slide 19).
+3. Install Figtree, then re-render and recheck the breaks.
+4. Rehearse and time; trim if over 22 minutes.
+5. Optionally re-render the cube videos from the final checkpoints for slides 31–32.

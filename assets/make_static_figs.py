@@ -155,6 +155,59 @@ def fig_gradient():
     plt.close(fig)
 
 
+def fig_robustness_1d():
+    """1D margin signal c(t) = x_y(t) - Y_op for the operator-zone requirement []_[0,T] not operator,
+    one run that dips into the zone. Left: exact min, one witness instant t*, zero gradient elsewhere.
+    Right: smooth surrogate at kappa = 10, gradient spread over the neighbouring samples."""
+    name, p = RUNS[2]
+    c = p[:, 1] - Y_OP
+    idx = np.arange(0, len(t), 4)
+    istar = int(np.argmin(c))
+    smin, _ = soft(10.0)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.4, 4.0))
+    fig.subplots_adjust(left=0.065, right=0.99, top=0.85, bottom=0.17, wspace=0.14)
+    titles = [r"exact: $\rho=\min_t c(t)$, one witness", r"smooth surrogate: gradient spreads over $t$"]
+    for k, ax in enumerate(axes):
+        ax.set_title(titles[k], fontsize=18, color="#262626", pad=8)
+        ax.axhline(0.0, color=PINK, lw=1.0, ls="--", zorder=1)
+        ax.text(t[-1], 0.6, "operator zone", color=PINK, ha="right", va="bottom", fontsize=14)
+        ax.plot(t, c, color=GREY, lw=2.0, zorder=3)
+        ax.set_xlim(t[0], t[-1])
+        ax.set_ylim(-16, 24)
+        ax.set_xlabel(r"$t$", fontsize=16)
+        if k == 0:
+            ax.set_ylabel(r"$c(t) = x_y(t) - Y_{\mathrm{op}}$", fontsize=16)
+        ax.set_xticks([]); ax.set_yticks([0])
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        if k == 0:
+            ax.plot(t[istar], c[istar], "o", ms=9, color=CYAN, zorder=5)
+            ax.annotate("", xy=(t[istar], 0), xytext=(t[istar], c[istar]),
+                        arrowprops=dict(arrowstyle="-", color=CYAN, lw=1.4, ls=":"))
+            ax.text(t[istar], c[istar] - 3.0, r"$t^\ast=\arg\min_t c(t)$", color=CYAN,
+                    ha="center", va="top", fontsize=14)
+            ax.text(t[istar] + 0.3, c[istar] + 2.2, rf"$\rho = {c[istar]:+.1f}$", color=CYAN,
+                    ha="left", fontsize=15)
+        else:
+            base = smin(c)
+            win = range(max(istar - 10, 0), min(istar + 11, len(c)))
+            g = np.zeros_like(c)
+            for i in win:
+                cq = c.copy(); cq[i] += 1e-3
+                g[i] = (smin(cq) - base) / 1e-3
+            g /= g.max() if g.max() > 0 else 1.0
+            ax.plot(t[istar], c[istar], "o", ms=9, color=CYAN, zorder=5)
+            for i in win:
+                if g[i] > 0.02:
+                    ax.plot([t[i], t[i]], [c[i], c[i] + 14 * g[i]], color=CYAN, lw=2.5,
+                            solid_capstyle="round", zorder=4, alpha=0.5 + 0.5 * g[i])
+            ax.text(t[istar] + 0.3, c[istar] + 2.2, rf"$\mathrm{{smin}}_\kappa = {base:+.1f}$", color=CYAN,
+                    ha="left", fontsize=15)
+    fig.savefig(HERE / "fig_robustness_1d.png", dpi=300)
+    plt.close(fig)
+
+
 def nav_frame(ax, xlim=(-5.3, 5.3), ylim=(-5.3, 6.3)):
     ax.set_xlim(*xlim); ax.set_ylim(*ylim); ax.set_aspect("equal")
     ax.set_xticks([]); ax.set_yticks([])
@@ -336,35 +389,31 @@ def fig_nav_satisfaction():
 
 
 def fig_time_budget():
-    """First satisfaction against budget and against wall-clock time, per navigation class.
+    """First satisfaction against wall-clock time, per navigation class.
 
-    Percentages: the 'first' columns of Table tab:anytime. Seconds: the per-class medians behind the
-    ranges of Section sec:results-anytime (CODE/flow-2d/outputs/ch5_ext_n100/ch5_numbers_ext.txt,
-    section G), whose extremes are the thesis's 0.10-2.56 s and 0.83-7.29 s. Ordered visit is left
-    out of the seconds, as in the thesis, and the optimizer has no satisfying run on it.
+    Seconds: the per-class medians behind the ranges of Section sec:results-anytime
+    (CODE/flow-2d/outputs/ch5_ext_n100/ch5_numbers_ext.txt, section G), whose extremes are the
+    thesis's 0.10-2.56 s and 0.83-7.29 s. Ordered visit is left out, as in the thesis, and the
+    optimizer has no satisfying run on it.
     """
     classes = ["Reach", "Nested\nreach-and-\ndwell", "Recurrence", "Sequence", "Sequence\nwith\navoidance",
                "Composite", "Choice of\ntarget", "Choice of\nsequence", "Ordered\nvisit", "Avoidance\nuntil reach"]
-    pct = {"STL-FM": [30, 89, 84, 86, 83, 94, 37, 84, 83, 53],
-           "STL Optimizer": [15, 9, 4, 23, 20, 24, 26, 31, None, 22]}
     sec = {"STL-FM": [0.098, 0.534, 0.534, 0.652, 0.677, 1.072, 0.214, 0.624, None, 2.559],
            "STL Optimizer": [0.830, 1.001, 1.053, 3.162, 5.789, 6.747, 6.084, 7.027, None, 7.289]}
     # The talk shows classes 1-6 only; 7-10 are in a backup slide.
-    classes = classes[:6]; pct = {k: v[:6] for k, v in pct.items()}; sec = {k: v[:6] for k, v in sec.items()}
-    fig, axes = plt.subplots(2, 1, figsize=(12.4, 4.1), sharex=True)
-    fig.subplots_adjust(left=0.075, right=0.995, top=0.89, bottom=0.24, hspace=0.25)
+    classes = classes[:6]; sec = {k: v[:6] for k, v in sec.items()}
+    fig, ax = plt.subplots(1, 1, figsize=(12.4, 2.6))
+    fig.subplots_adjust(left=0.075, right=0.995, top=0.80, bottom=0.26)
     x = np.arange(len(classes)); w = 0.36
-    for ax, data, ylab, ymax in [(axes[0], pct, "% of budget", 100), (axes[1], sec, "seconds, estimated", 8)]:
-        for k, (name, v) in enumerate(data.items()):
-            xs = [xi + (k - 0.5) * w for xi, val in zip(x, v) if val is not None]
-            ax.bar(xs, [val for val in v if val is not None], w * 0.92, color=PLANNER_COL[name],
-                   label=name if ax is axes[0] else None)
-        ax.set_ylim(0, ymax * 1.08)
-        ax.set_ylabel(ylab, fontsize=14)
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.grid(axis="y", color="#e3e3e3", lw=0.8); ax.set_axisbelow(True)
-    axes[1].set_xticks(x); axes[1].set_xticklabels(classes, fontsize=14)
-    axes[0].legend(ncol=2, frameon=False, fontsize=14, loc="lower center", bbox_to_anchor=(0.5, 1.0))
+    for k, (name, v) in enumerate(sec.items()):
+        xs = [xi + (k - 0.5) * w for xi, val in zip(x, v) if val is not None]
+        ax.bar(xs, [val for val in v if val is not None], w * 0.92, color=PLANNER_COL[name], label=name)
+    ax.set_ylim(0, 8 * 1.08)
+    ax.set_ylabel("seconds, estimated", fontsize=14)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", color="#e3e3e3", lw=0.8); ax.set_axisbelow(True)
+    ax.set_xticks(x); ax.set_xticklabels(classes, fontsize=14)
+    ax.legend(ncol=2, frameon=False, fontsize=14, loc="lower center", bbox_to_anchor=(0.5, 1.0))
     fig.savefig(HERE / "fig_time_budget.png", dpi=300)
     plt.close(fig)
 
@@ -401,11 +450,12 @@ if __name__ == "__main__":
         print(f"{name}: rho {r:+.2f} (seat part {f:+.2f}, clearance {c:+.2f})")
     fig_cell()
     fig_gradient()
+    fig_robustness_1d()
     fig_sparse()
     fig_nav_satisfaction()
     fig_cube_logic_task()
     fig_time_budget()
     fig_modes()
     fig_progression()
-    print("wrote fig_robustness_cell, fig_robustness_gradient, fig_sparse_unbounded, fig_nav_satisfaction, "
-          "fig_cube_logic_task, fig_modes, fig_prog_1-3")
+    print("wrote fig_robustness_cell, fig_robustness_gradient, fig_robustness_1d, fig_sparse_unbounded, "
+          "fig_nav_satisfaction, fig_cube_logic_task, fig_modes, fig_prog_1-3")

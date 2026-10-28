@@ -424,6 +424,68 @@ def section_roadmap(title, section, group, notes):
     return s
 
 
+# ───────────────────────── guided-sampler diagram (fig_guided_sampler.tex) ─────────────────────────
+# One guided Euler step as a dataflow, redrawn natively, compact, so it can be built click by
+# click. Node positions and colours follow the thesis figure
+# (figures/FlowMatching/fig_guided_sampler.tex): color1bg prior (BLUE), color2bg predicted
+# endpoint (CYAN), color3bg requirement score (PINK), color4bg gradient pipeline (GREEN, drawn
+# darker as GREEN_D to match gradcol), color5bg loop machinery (GREY). Four rows, top to bottom:
+# prior/endpoint/score, smoothness penalty (offset right, clear of the score box), the gradient
+# pipeline (right to left), the update and re-pin. Drawn on a 0..12.02 x 0..5.00 grid scaled into
+# the content band.
+GSAMP_NODES = {
+    "prior":  (0.00, 0.00, 2.90, 0.80, [("v", {"math": True}), ("θ", {"sub": True}), ("(τ, s)", {})],
+               "learned prior field", BLUE),
+    "endp":   (3.75, 0.00, 3.55, 0.80, "τ̂ = τ + (1 − s) vθ", "predicted endpoint", CYAN),
+    "score":  (8.30, 0.00, 3.72, 0.80, [("ρ", {}), ("φ", {"italic": True}), ("(τ̂)", {})],
+               "requirement score", PINK),
+    "smth":   (7.30, 1.45, 4.72, 0.85, "γ Σ ‖pₜ₊₁ − 2pₜ + pₜ₋₁‖²", "smoothness penalty", GREY),
+    "grad":   (9.52, 2.80, 2.50, 0.75, "∇τ̂", "autodiff", GREEN_D),
+    "mask":   (5.10, 2.80, 3.70, 0.75, "mask, normalize", "unit direction", GREEN_D),
+    "guid":   (0.00, 2.80, 3.38, 0.75, "λ₀ ĝ Δs", "guidance term", GREEN_D),
+    "repin":  (0.00, 4.20, 7.60, 0.80, "τ ← τ + Δs(vθ + λ₀ĝ), then re-pin",
+               "π₀(τ) = x_start, repeat K times", GREY),
+}
+
+
+def guided_diagram(s, on, click_map, x0=0.66, y0=2.10, w=12.02, h=4.80):
+    """A compact redraw of fig_guided_sampler.tex. `on` is the set of node keys drawn in colour (any
+    node declared below but not yet `on` shows grey, not yet introduced); `click_map` gives the
+    click number for every key (node or arrow) to draw this call, so a stage appears as one unit."""
+    gx, gy = 12.02, 5.00
+    X = lambda x: x0 + x / gx * w            # noqa: E731
+    Y = lambda y: y0 + y / gy * h             # noqa: E731
+
+    def node(key):
+        x, y, bw, bh, text, cap, c = GSAMP_NODES[key]
+        fill, line, tc = (tint(c, 16), c, INK) if key in on else (FAINT, "D2D2D2", LIGHT)
+        s.add(box(s, X(x), Y(y), bw / gx * w, bh / gy * h, (text, cap), fill, line, size=12,
+                  color=tc, lw=1.25, name=key), click=click_map.get(key))
+
+    def edge(key, x1, y1, x2, y2, c):
+        s.add(arrow(s, X(x1), Y(y1), X(x2), Y(y2), color=c if key in on else "D2D2D2", lw=1.5),
+              click=click_map.get(key))
+
+    for key in GSAMP_NODES:
+        if key in click_map:
+            node(key)
+
+    if "endp" in click_map:
+        edge("endp", 2.90, 0.40, 3.75, 0.40, BLUE)
+    if "score" in click_map:
+        edge("score", 7.30, 0.40, 8.30, 0.40, CYAN)
+    if "smth" in click_map:
+        edge("smth", 9.65, 0.80, 9.65, 1.45, CYAN)
+    if "grad" in click_map:
+        edge("grad", 10.77, 1.45, 10.77, 2.80, PINK)
+    if "mask" in click_map:
+        edge("mask", 9.52, 3.175, 8.80, 3.175, GREEN_D)
+    if "guid" in click_map:
+        edge("guid", 5.10, 3.175, 3.38, 3.175, GREEN_D)
+    if "repin" in click_map:
+        edge("repin", 1.69, 3.55, 1.69, 4.20, GREEN_D)
+
+
 # ───────────────────────────── the slides ─────────────────────────────
 def slides():
     out = []
@@ -594,8 +656,8 @@ def slides():
                 "inference time", size=19, color=INK))
     s.add(label(s, CX, 2.95, CW, 0.32, "The trained model is called the learned prior, because it provides the motion "
                 "that the requirement does not specify", size=15))
-    callout(s, CX, 3.45, CW, 0.80, "RQ1", "Does a demonstration determine the requirement?", BLUE, size=20)
-    callout(s, CX, 4.38, CW, 0.80, "RQ2", "Does the robustness score alone determine a trajectory?", PINK, size=20)
+    callout(s, CX, 3.45, CW, 0.80, "RQ1", "What does a demonstration witnessing a requirement imply about that requirement?", BLUE, size=20)
+    callout(s, CX, 4.38, CW, 0.80, "RQ2", "What does maximizing the robustness score alone determine about a trajectory?", PINK, size=20)
     callout(s, CX, 5.31, CW, 0.80, "Method", "STL-FM, robustness guidance of the learned prior", CYAN, size=20)
     s.notes = ("The aim: a method for imposing STL requirements on a trained generative model at "
                "inference time. Two open questions concern the requirement itself rather "
@@ -630,6 +692,10 @@ def slides():
     s.add(label(s, CX, 5.30, CW, 0.40,
                 "The requirement bounds when the part is seated and where the robot may not go",
                 size=17, align="ctr"), click=1)
+    s.add(label(s, CX, 5.74, CW, 0.32,
+                [("Evaluated fragment: predicates ", {}), ("μ", M), (", negation, conjunction, bounded ", {}),
+                 ("◇", M), (" and ", {}), ("◻", M)],
+                size=14, color=MUTED, align="ctr"), click=1)
     cite(s, "Maler and Nickovic 2004")
     s.notes = ("Signal Temporal Logic expresses time bounds over real-valued signals, such as a robot "
                "trajectory. [Click] Eventually, the diamond, means at some instant of its window. Always, "
@@ -637,74 +703,34 @@ def slides():
                "part becomes seated and stays seated for d, and at every instant the robot stays out of "
                "the operator zone. [Click] The requirement bounds only the timing of the seating and the "
                "region to avoid. The grasp, the approach and the rest of the motion are hard to write "
-               "as a formula and are learned from the demonstrations. [§1.1, eq. 1.1; §3.2]")
+               "as a formula and are learned from the demonstrations. Every requirement in this talk is "
+               "built from a predicate, a margin function of the state; negation; conjunction; and these two "
+               "bounded temporal operators. [§1.1, eq. 1.1; §3.2; Remark rem:fragment]")
     out.append(s)
 
-    # the evaluated fragment
-    s = content("Evaluated fragment", "Background")
-    eqimg(s, "fragment", 6.67, 2.15, align="c", descr="Syntax of the evaluated fragment")
-    cols = [(0.70, 2.00), (2.80, 3.90), (6.80, 5.85)]
-    for (x, w), h in zip(cols, ["Construct", "Reads as", "In the load-and-bond requirement"]):
-        s.add(label(s, x, 2.88, w, 0.30, h, size=14))
-    rows = [
-        ([("μ", M)], [("a predicate, ", {}), ("h(x) ≥ 0", M)],
-         [("seated", {"italic": True}), (", the part within tolerance of the seat", {})]),
-        ([("¬μ", M)], [("μ", M), (" does not hold", {})],
-         [("¬", M), ("operator", {"italic": True}), (", outside the operator zone", {})]),
-        ([("φ", M), ("1", SUB), (" ∧ ", M), ("φ", M), ("2", SUB)], "both hold",
-         "seated on time and outside the zone"),
-        ([("◇", M), ("[a,b]", SUB), (" φ", M)],
-         [("φ", M), (" at some instant of [a, b]", {})], "the part is seated within the open time"),
-        ([("◻", M), ("[a,b]", SUB), (" φ", M)],
-         [("φ", M), (" at every instant of [a, b]", {})], "held for d, outside the zone throughout"),
-    ]
-    for k, (sym, reads, ex) in enumerate(rows):
-        y = 3.22 + 0.58 * k
-        s.add(rule(s, 0.70, 12.65, y))
-        s.add(label(s, cols[0][0], y + 0.08, cols[0][1], 0.44, sym, size=22, color=INK, anchor="ctr"))
-        s.add(label(s, cols[1][0], y + 0.08, cols[1][1], 0.44, reads, size=17, color=INK, anchor="ctr"))
-        s.add(label(s, cols[2][0], y + 0.08, cols[2][1], 0.44, ex, size=17, color=INK, anchor="ctr"))
-    s.add(rule(s, 0.70, 12.65, 3.22 + 0.58 * 5))
-    s.notes = ("The evaluated fragment. A predicate is a margin function of the state that is "
-               "non-negative when the predicate holds, for example the part within a tolerance of the seat. "
-               "Negation, conjunction and the two bounded temporal operators build every requirement evaluated "
-               "in this talk. [§3.2; Remark rem:fragment]")
-    out.append(s)
-
-    # robustness
-    s = content("Quantitative robustness", "Background")
-    eqimg(s, "robustness", 6.67, 2.10, scale=0.85, align="c", descr="Robustness of the evaluated fragment")
-    eqimg(s, "soundness", 6.67, 3.42, scale=0.95, align="c", descr="Soundness: positive robustness implies satisfaction")
-    img = HERE / "fig_robustness_cell.png"
-    s.add(picture(s, img, *fit(img, CX, 3.92, CW, 2.68),
-                  "Three executions in the load-and-bond cell with robustness +2.6, -8.6 and -6.0 cm"),
+    # robustness, exact and smooth, one example
+    s = content("Robustness", "Background")
+    eqimg(s, "robustness", 6.67, 2.05, scale=0.70, align="c", descr="Robustness of the evaluated fragment")
+    eqimg(s, "soundness", 6.67, 3.08, scale=0.80, align="c", descr="Soundness: positive robustness implies satisfaction")
+    eqimg(s, "smooth", 6.67, 3.46, scale=0.85, align="c", descr="Log-sum-exp surrogate of max and min")
+    img = HERE / "fig_robustness_1d.png"
+    s.add(picture(s, img, *fit(img, CX, 4.10, CW, 2.20),
+                  "Robustness of an avoidance margin over time, exact and under the smooth surrogate"),
           is_sp=False)
-    cite(s, "Donzé and Maler 2010.  Values in the figure are illustrative.")
+    s.add(label(s, CX, 6.34, CW, 0.30, [("Guidance uses the surrogate at ", {}), ("κ", M), (" = 10.  Satisfaction is "
+                "always scored with the exact semantics.", {})], size=14, align="ctr"))
+    cite(s, "Donzé and Maler 2010; Leung et al. 2021; Kapoor et al. 2025 (STLCG++)")
     s.notes = ("Robustness replaces the Boolean verdict with a real number, defined by recursion over the formula. A "
                "predicate gives its margin h, negation changes the sign, conjunction and always take a minimum, "
                "eventually a maximum over its window. Soundness: a positive score certifies satisfaction. Below, "
-               "three executions in the cell. (a) The part is seated inside the window and held, so the margin is "
-               "positive. (b) At the end of the window the part is still 8.6 cm from the seat. (c) The robot crosses "
-               "6 cm into the operator zone. The margin is a distance, in the units of the predicate, not a time. "
-               "[§3.2, def:robustness, eq:robustness-sound]")
-    out.append(s)
-
-    # differentiable
-    s = content("Smooth robustness", "Background")
-    eqimg(s, "smooth", 6.67, 2.15, align="c", descr="Log-sum-exp surrogate of max and min")
-    img = HERE / "fig_robustness_gradient.png"
-    s.add(picture(s, img, *fit(img, CX, 2.98, CW, 3.25),
-                  "Gradient of the robustness score on a late plan, exact and smoothed"), is_sp=False)
-    s.add(label(s, CX, 6.28, CW, 0.32, [("Guidance uses the surrogate at ", {}), ("κ", M), (" = 10.  Satisfaction is "
-                "always scored with the exact semantics.", {})], size=15, align="ctr"))
-    cite(s, "Leung et al. 2021; Kapoor et al. 2025 (STLCG++)")
-    s.notes = ("The exact min and max have a gradient on a single argument. With the exact semantics the gradient "
-               "acts on a single waypoint, here the state at the end of the open time. Log-sum-exp replaces max and "
-               "min, and at sharpness kappa = 10 in the experiments it spreads the gradient over a few neighbouring "
-               "waypoints. The formula is compiled by recursion over its syntax tree into this differentiable score, "
-               "with no learned component, so a new requirement requires only a new syntax tree. The smoothed score is "
-               "sound only up to a margin, so satisfaction is always scored exactly. Implementation: stljax, the JAX "
-               "library of STLCG++. [§3.2.3, eq:logsumexp; §4.2, alg:build-rho, prop:smoothing-bias]")
+               "the avoidance margin of one plan over time. The exact robustness is the minimum of the margin, a "
+               "single witness instant; its gradient acts on that one instant alone. Log-sum-exp replaces max and "
+               "min, and at sharpness kappa = 10 in the experiments it spreads the gradient over the neighbouring "
+               "instants. The formula is compiled by recursion over its syntax tree into this differentiable score, "
+               "with no learned component, so a new requirement requires only a new syntax tree. The smoothed score "
+               "is sound only up to a margin, so satisfaction is always scored exactly. Implementation: stljax, the "
+               "JAX library of STLCG++. [§3.2, def:robustness, eq:robustness-sound; §3.2.3, eq:logsumexp; §4.2, "
+               "alg:build-rho, prop:smoothing-bias]")
     out.append(s)
 
     out.append(section_roadmap("Learning the prior", "Background", "prior",
@@ -834,43 +860,54 @@ def slides():
     out.append(section_roadmap("Guiding the prior", "Method", "sampler",
                                "Third, the guided sampler that combines the learned prior with the robustness score."))
 
-    # guided velocity
+    # guided velocity: the dataflow built up top row first, equations revealed alongside each click
     s = content("Guided velocity field", "Method")
-    eqimg(s, "guided", 6.67, 2.20, align="c", descr="The guided velocity field, prior velocity plus a constant "
-          "times the conditioned requirement gradient at the predicted endpoint")
-    s.add(label(s, CX, 3.75, CW, 0.32, "with the penalized objective and the conditioned gradient", size=15,
-                align="ctr"))
-    eqimg(s, "conditioning", 6.67, 4.15, align="c", descr="Penalized objective and masked, normalized gradient")
-    s.add(label(s, CX, 5.40, CW, 0.75,
-                ([("λ", M), ("0", SUB), (" ≥ 0 is one constant strength for the whole flow.", {})],
-                 "No component of the sampling loop is trained, and the requirement is not an input to the network."),
-                size=17, color=INK, align="ctr"))
-    s.notes = ("The sampler integrates the guided velocity from the same Gaussian start as the prior. The "
-               "prior velocity moves the iterate toward trajectories likely under the learned prior. The "
-               "requirement term moves it toward satisfaction. The gradient is taken of a penalized objective, the "
-               "robustness minus a small finite-difference smoothness penalty, masked to the position coordinates, "
-               "and normalized to unit length, so lambda_0 is a step size that transfers across requirements. This is a "
-               "soft realization of the constrained problem, not a solution with a certificate. "
+    guided_diagram(s, on={"prior", "endp", "score", "smth"},
+                   click_map={"prior": None, "endp": 0, "score": 1, "smth": 1}, h=1.95)
+    eqimg(s, "guided", CX + CW / 2, 3.60, scale=0.85, align="c", click=0,
+          descr="The guided velocity field, prior velocity plus a constant times the conditioned "
+          "requirement gradient at the predicted endpoint")
+    eqimg(s, "conditioning", CX + CW / 2, 5.00, scale=0.85, align="c", click=1,
+          descr="Penalized objective and masked, normalized gradient")
+    s.add(label(s, CX, 5.90, CW, 0.55,
+                [("λ", M), ("0", SUB), (" ≥ 0 is one constant strength for the whole flow; no component of the "
+                 "sampling loop is trained.", {})],
+                size=14, color=INK, align="ctr"), click=1)
+    s.notes = ("The sampler integrates the guided velocity from the same Gaussian start as the prior. [Click] The "
+               "prior velocity moves the iterate toward trajectories likely under the learned prior, extrapolated to "
+               "a predicted endpoint. [Click] The requirement is scored at that predicted endpoint, alongside a "
+               "smoothness penalty, and their difference forms a penalized objective; its gradient is taken, masked "
+               "to the position coordinates, and normalized to unit length, so lambda_0 is a step size that "
+               "transfers across requirements. This is a soft realization of the constrained problem, not a "
+               "solution with a certificate. "
                "[§4.3, eq:guided-velocity; §4.5, eq:smoothness-penalty, eq:grad-normalize]")
     out.append(s)
 
-    # one sampler step, at the predicted endpoint
+    # one sampler step: the rest of the dataflow, built click by click alongside the four update lines
     s = content("Guided sampler", "Method")
-    s.add(label(s, CX, 2.15, CW, 0.36,
+    s.add(label(s, CX, 1.86, CW, 0.32,
                 [("For k = 0, …, K − 1 with s = kΔs, Δs = 1/K and K = 64, from ", {}), ("τ", M),
-                 (" ~ N(0, I) with the start state pinned", {})], size=17, color=INK, align="ctr"))
-    eqimg(s, "step", 6.67, 2.70, align="c", descr="One step of the guided sampler")
-    s.add(label(s, CX, 4.95, CW, 1.10,
-                ("The gradient is taken with respect to the predicted endpoint, not through the network.",
-                 [("Early in the flow the iterate ", {}), ("τ", M), ("(s) is mostly noise, whereas ", {}), ("τ̂", M),
-                  ("(s) is the prior’s estimate of the finished trajectory.", {})]),
-                size=16, align="ctr"))
+                 (" ~ N(0, I) with the start state pinned", {})], size=14, color=INK, align="ctr"))
+    guided_diagram(s, on={"prior", "endp", "score", "smth", "grad", "mask", "guid", "repin"},
+                   click_map={"prior": None, "endp": None, "score": None, "smth": None,
+                              "grad": 0, "mask": 1, "guid": 2, "repin": 3},
+                   y0=2.25, h=2.00)
+    eqimg(s, "step", CX + CW / 2, 4.45, scale=0.78, align="c",
+          descr="One step of the guided sampler")
+    s.add(label(s, CX, 6.30, CW, 0.55,
+                [("Early in the flow ", {}), ("τ", M), ("(s) is mostly noise, whereas ", {}), ("τ̂", M),
+                 ("(s) is the prior’s estimate of the finished trajectory; the gradient is taken with respect to "
+                  "it, not through the network.", {})],
+                size=13, align="ctr"))
     cite(s, "The full sampler is in backup")
-    s.notes = ("One step of the sampler. Early in the flow the iterate is mostly noise, and the gradient of its "
-               "robustness points in a direction unrelated to any plausible trajectory. The predicted endpoint is the "
-               "prior's running estimate of the finished trajectory, obtained from the straight-line path. The "
-               "requirement is scored on that estimate, and the gradient is taken with respect to it, not through the "
-               "network. Then mask and normalize, take a constant-strength Euler step, and re-pin the start state. "
+    s.notes = ("One step of the sampler, continuing the dataflow from the previous slide. [Click] Autodiff takes "
+               "the gradient of the penalized objective with respect to the predicted endpoint. [Click] It is "
+               "masked to the position coordinates and normalized to unit length. [Click] That gives the guidance "
+               "term, lambda_0 times the normalized gradient times the step size. [Click] It is added to the "
+               "nominal prior increment, the sum is taken as one Euler step, and the start state is re-pinned; the "
+               "loop repeats for K steps. Early in the flow the iterate is mostly noise, and the gradient of its "
+               "robustness would point in a direction unrelated to any plausible trajectory; the predicted endpoint "
+               "is the prior's running estimate of the finished trajectory instead. "
                "[§4.4, eq:predicted-endpoint; §4.7, alg:guided-ode]")
     out.append(s)
 
@@ -914,64 +951,58 @@ def slides():
                "[§5.1.2-5.1.3, tab:families, tab:planners]")
     out.append(s)
 
-    # one prior, six classes
+    # one prior, six classes, STL-FM against the STL Optimizer
     s = content("Six requirement classes", "Results")
     classes = [("reach", "Reach"), ("nested", "Nested reach-and-dwell"), ("recurrence", "Recurrence"),
                ("sequence", "Sequence"), ("seqavoid", "Sequence with avoidance"), ("composite", "Composite")]
+    nav_eqs = ["nav_reach", "nav_nested", "nav_recurrence", "nav_sequence", "nav_seqavoid", "nav_composite"]
     for k, (key, name) in enumerate(classes):
-        img = pdf_png(OL.format(f"{key}_guided"))
+        eq = nav_eqs[k]
         col, row_ = k % 3, k // 3
-        x0, y0 = 1.10 + 3.80 * col, 2.05 + 2.17 * row_
-        s.add(label(s, x0, y0, 3.4, 0.30, name, size=15, color=INK, bold=True, align="ctr"))
-        s.add(picture(s, img, *fit(img, x0, y0 + 0.30, 3.4, 1.83), f"STL-FM plans, {name}"), is_sp=False)
+        x0, y0 = 1.10 + 3.80 * col, 2.00 + 2.17 * row_
+        s.add(label(s, x0, y0, 3.4, 0.24, name, size=13, color=INK, bold=True, align="ctr"))
+        eqimg(s, eq, x0 + 1.70, y0 + 0.26, scale=min(0.85, 3.3 * 600 / Image.open(HERE / f"eq_{eq}.png").size[0]),
+              align="c", descr=f"Formula, {name}")
+        for j, (variant, cap) in enumerate([("guided", "STL-FM"), ("stlonly", "STL Optimizer")]):
+            img = pdf_png(OL.format(f"{key}_{variant}"))
+            px0 = x0 + 1.72 * j
+            s.add(picture(s, img, *fit(img, px0, y0 + 0.52, 1.64, 1.38), f"{cap} plans, {name}"), is_sp=False)
+            s.add(label(s, px0, y0 + 1.90, 1.64, 0.20, cap, size=10, color=MUTED, align="ctr"))
     claim(s, [("One learned prior and one constant strength ", {}), ("λ", M), ("0", SUB),
               (" are used for all six requirement classes", {})])
     s.notes = ("The same prior and the same lambda_0 for all six classes. A new requirement requires only a new "
                "syntax tree. Satisfaction rates of STL-FM: reach 0.96, nested reach-and-dwell 1.00, "
-               "recurrence 0.98, sequence 0.89, sequence with avoidance 0.89, composite 0.78. A sweep of one "
+               "recurrence 0.98, sequence 0.89, sequence with avoidance 0.89, composite 0.78. The STL Optimizer "
+               "satisfies every class on every run, so the panels show plan shape rather than a satisfaction gap; "
+               "on sequence and sequence with avoidance its plans leave the arena (next slide). A sweep of one "
                "requirement's own parameters is future work, so this does not test adaptation to a changed "
                "parameter. If asked about roughness: on nested reach-and-dwell 47 percent of turns exceed a "
                "right angle. [tab:families; tab:openloop; §4.2; §6.1; §7.2]")
     out.append(s)
 
-    # navigation satisfaction
-    s = content("Logic satisfaction in navigation", "Results")
+    # navigation satisfaction and time to satisfaction, merged
+    s = content("Logic satisfaction and time to satisfaction", "Results")
     img = HERE / "fig_nav_satisfaction.png"
-    s.add(picture(s, img, *fit(img, CX, TOP, CW, 4.30), "Satisfaction rate per class for three planners"),
+    s.add(picture(s, img, *fit(img, CX, TOP, CW, 2.75), "Satisfaction rate per class for three planners"),
           is_sp=False)
-    claim(s, "Logic satisfaction alone does not distinguish STL-FM from the STL Optimizer")
+    img = HERE / "fig_time_budget.png"
+    s.add(picture(s, img, *fit(img, CX, 4.95, CW, 1.30), "First satisfaction in estimated seconds, per class, "
+                  "for STL-FM and the STL Optimizer"), is_sp=False)
+    claim(s, "STL-FM satisfies most classes at comparable rates and plans 5 to 25 times faster")
     s.notes = ("Over 100 runs per class. The endpoint-inpaint planner satisfies reach on every run and no other "
                "class on any run: the pin fixes the end, and the prior generates the remainder of the trajectory, "
                "which contains no dwell, order or avoidance. STL-FM satisfies the five history-dependent classes at "
                "0.78 to 1.00. The STL Optimizer satisfies every class on every run, so satisfaction "
-               "alone does not separate it from STL-FM. Evidence about the prior must come from other properties of "
-               "the plans. Plan time: 0.42 to 1.15 s for STL-FM, 5.67 to 28.22 s for the STL Optimizer. "
-               "[tab:openloop, tab:anytime, §6.1]")
-    out.append(s)
-
-    # time to first satisfaction, in budget and in seconds
-    s = content("Time to satisfaction", "Results")
-    img = HERE / "fig_time_budget.png"
-    s.add(picture(s, img, *fit(img, CX, TOP, CW, 3.78), "First satisfaction as a percentage of the budget and in "
-                  "estimated seconds, per class, for STL-FM and the STL Optimizer"), is_sp=False)
-    s.add(label(s, CX, 5.88, CW, 0.30, "Medians over satisfying runs. Budgets of 64 steps for STL-FM and 1,500 to 6,000 "
-                "for the optimizer. Estimated first satisfaction, 0.10 to 1.07 s against 0.83 to 6.75 s", size=12,
-                align="ctr"))
-    claim(s, "The STL Optimizer satisfies the requirement earlier in its budget but later in wall-clock time")
-    s.notes = ("When in its budget each planner first satisfies the requirement, over the runs whose final plan "
-               "satisfies it. STL-FM takes 64 integration steps and the STL Optimizer 1,500 to 6,000 "
-               "gradient steps, according to the class. On nested reach-and-dwell, recurrence, sequence, sequence "
-               "with avoidance and composite, STL-FM first satisfies the requirement at 83 to 94 percent of its "
-               "budget, and on reach at 30 percent. The optimizer first satisfies it at 4 to 24 percent. In seconds "
-               "the order reverses. Assuming every step of a planner takes the same time, STL-FM first satisfies the "
-               "requirement after 0.10 to 1.07 seconds and the optimizer after 0.83 to 6.75, and on every class the "
-               "optimizer is the later. A whole plan takes 0.42 to 1.15 seconds for STL-FM and 5.67 to 28.22 seconds "
-               "for the optimizer. In the cube study STL-FM plans in 0.24 seconds and the optimizer in 0.96. In the "
-               "kitchen STL-FM plans in 0.25 seconds under both priors, against 0.16 and 0.21 seconds for the "
-               "unguided prior. Times are medians over 20 separate timing runs per class on a laptop GPU, an NVIDIA "
-               "RTX A500, without recording the robustness at every step. A repeated measurement of the cube and "
-               "kitchen times was up to 20 percent slower, with the same order of the planners. "
-               "[§5.2.3, tab:anytime; §5.3; §5.4; app:anytime]")
+               "alone does not separate it from STL-FM. Below, estimated wall-clock time to first satisfaction, "
+               "assuming every step of a planner takes the same time: 0.10 to 1.07 seconds for STL-FM against "
+               "0.83 to 6.75 for the optimizer, and on every class the optimizer is the later. A whole plan takes "
+               "0.42 to 1.15 seconds for STL-FM and 5.67 to 28.22 seconds for the optimizer. In the cube study "
+               "STL-FM plans in 0.24 seconds and the optimizer in 0.96. In the kitchen STL-FM plans in 0.25 seconds "
+               "under both priors, against 0.16 and 0.21 seconds for the unguided prior. Times are medians over 20 "
+               "separate timing runs per class on a laptop GPU, an NVIDIA RTX A500, without recording the "
+               "robustness at every step. A repeated measurement of the cube and kitchen times was up to 20 percent "
+               "slower, with the same order of the planners. [tab:openloop; §5.2.3, tab:anytime; §5.3; §5.4; "
+               "app:anytime; §6.1]")
     out.append(s)
 
     # optimizing robustness alone
@@ -1058,10 +1089,10 @@ def slides():
     # ── Conclusions ──
     s = content("Conclusions", "Conclusions")
     answers = [
-        ("RQ1", BLUE, "Does a demonstration determine the requirement?",
+        ("RQ1", BLUE, "What does a demonstration witnessing a requirement imply about that requirement?",
          "A demonstration witnesses a requirement without determining it, so the requirement "
          "is stated separately from the demonstrations."),
-        ("RQ2", PINK, "Does the robustness score alone determine a trajectory?",
+        ("RQ2", PINK, "What does maximizing the robustness score alone determine about a trajectory?",
          "The robustness score alone does not determine a trajectory. Its gradient depends on at most m waypoints, "
          "and its maximizers are unbounded where only avoidance applies. Without the "
          "prior, plans for the sequencing requirements leave the arena, and the planned cube moves without contact."),
@@ -1170,7 +1201,8 @@ def slides():
          [("Their satisfaction sets form strictly increasing chains, from ", {}), ("{τ⋆}", M),
           (", “do exactly this”, to the whole trajectory space ", {}), ("𝒯", M), (", “do anything”.", {})],
          "Consequently, no map from a single demonstration to a requirement is determined by the demonstration."),
-        "RQ1 therefore has a negative answer, and the requirement is stated separately from the demonstrations, "
+        "This answers RQ1. Witnessing constrains membership in a satisfaction set but does not determine which "
+        "requirement was intended, and the requirement is stated separately from the demonstrations, "
         "as an STL formula.",
         "This result answers RQ1. Any trajectory witnesses uncountably many requirements, ordered from 'do exactly "
         "this' to 'do anything', so no map from one demonstration to a requirement is determined by its "

@@ -231,3 +231,55 @@ The main on-slide changes:
   slide renumbered down by one, two or three accordingly; `defence_script.md` and
   `deck_summary.md` carry the new numbers.
 
+## Background slides 10–13 condensed (author, 2026-10-23)
+Author's request: the audience can be assumed to have basic STL background, so slides 10–13
+("Signal Temporal Logic", "Evaluated fragment", "Quantitative robustness", "Smooth robustness")
+were reviewed for redundancy with that assumption. Slide 10 is kept unchanged as written (author:
+brief and an important bridge from the motivation to STL) apart from one added line. Three
+options were put to the author for the fragment table (fold into slide 10, trim, cut, or merge
+into the robustness slide); fold-in was chosen. For the robustness/smoothing slides, the author
+was asked whether to keep them separate or combine; combine was chosen.
+
+Changes to `assets/build_deck.py`:
+- **"Evaluated fragment" deleted** as a standalone slide. Its one load-bearing fact — the fragment
+  is predicates, negation, conjunction, and bounded eventually/always — is now a single muted line
+  on slide 10 under the existing explanatory caption: "Evaluated fragment: predicates μ, negation,
+  conjunction, bounded ◇ and ◻". The construct-by-construct table (readings and load-and-bond
+  examples) is cut outright; the audience is assumed to already know what ◇ and ◻ mean, so the
+  table was teaching syntax rather than adding information. Slide notes keep the "A predicate is a
+  margin function..." explanation, moved onto slide 10's notes.
+- **"Quantitative robustness" and "Smooth robustness" merged into one slide, "Robustness".** Both
+  carried one equation block and one multi-panel figure; the author judged a tighter time budget
+  worth more than extra dwell time per idea here, unlike slide 10 which stays separate. The merged
+  slide carries all three equations (the robustness recursion, soundness, and the log-sum-exp
+  smooth surrogate) and one new figure.
+- **New figure, `fig_robustness_1d.png`** (`assets/make_static_figs.py`, `fig_robustness_1d()`).
+  The author pushed back on reusing the old three-panel cell figure or the two-panel cell-view
+  gradient figure for the merged slide ("make a much simpler example... doesn't have to be 3
+  different cases, it can even be a 1D example"). The new figure plots the avoidance margin
+  c(t) = x_y(t) − Y_op of run 3 of `RUNS` (the "enters the operator zone" trajectory already used
+  by the old figures) as a 1D curve over t, two panels: left, the exact robustness as the minimum
+  of c(t), one witness instant t*, annotated; right, the smooth surrogate (smin at κ = 10),
+  annotated with stems of varying height at the samples near t* that carry non-negligible
+  gradient weight, showing the spread directly rather than through cell-view arrows. This is the
+  first line/signal-style figure in the deck — a deliberate departure from the deck's otherwise
+  consistent top-view spatial-scene style (the cell diagram used on slides 2–9's requirements
+  figure and elsewhere), chosen because it shows the min-over-window and gradient-spread mechanic
+  more directly than another spatial scene would. The old `fig_cell()`/`fig_gradient()` functions
+  and their output files (`fig_robustness_cell.png`, `fig_robustness_gradient.png`) are kept in
+  `make_static_figs.py` and on disk, unused by any slide, in case of rollback.
+- **Equation sizes reduced** on the merged slide (robustness 0.85→0.70, soundness 0.95→0.80,
+  smooth 1.0→0.85 scale) to fit three equation blocks plus the figure in the content band —
+  flagged to the author as a real trade-off (effective sizes drop to roughly 14–19 pt versus
+  17–22 pt on the original two slides); the author chose to ship as drafted rather than cut an
+  equation or keep the slides split, pending a check on the actual PowerPoint render.
+
+Net effect: Background shrinks by two slides (10–13 to 10–11); every slide from the old "Learning
+the prior" roadmap slide onward renumbers down by two throughout the talk and backup.
+`defence_script.md` and `memory/deck_summary.md` carry the new numbers.
+
+**Not yet done:** this was built and content-checked via `markitdown` only, from a WSL session
+with no LibreOffice or PowerPoint available to render the KTH template. The next session with
+Windows/PowerPoint access must run `render_deck.ps1`/`render_deck.sh` and check slide 11
+specifically for overflow or cramped spacing before the author reviews it — see `open_items.md`.
+

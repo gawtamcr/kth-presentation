@@ -32,6 +32,10 @@ PREAMBLE = r"""
 \definecolor{cblue}{HTML}{1954A6}
 \definecolor{cgreen}{HTML}{7B8D1E}
 \definecolor{cpink}{HTML}{D85497}
+% fig_guided_sampler.tex palette (color1bg..color5bg), for the guided-sampler slides
+\definecolor{ccyan}{HTML}{24A0D8}
+\definecolor{cgrad}{HTML}{6D7D1B}
+\definecolor{cgrey}{HTML}{63666A}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\T}{\mathcal{T}}
@@ -87,26 +91,29 @@ EQS = {
     # eq:fm-ode-bg
     "fm_ode": (20, r"""
         \frac{d\tau}{ds} = \vtheta(\tau, s), \qquad \tau(0)\sim\mathcal{N}(0, I), \qquad s : 0 \to 1"""),
-    # eq:guided-velocity
+    # eq:guided-velocity, coloured as fig_guided_sampler.tex: cblue prior, cgrad requirement gradient
     "guided": (30, r"""
         v_{\mathrm{guided}}(\tau, s) \;=\;
-        \underbrace{\vtheta(\tau, s)}_{\mathclap{\text{learned prior}}}
+        \underbrace{\textcolor{cblue}{\vtheta(\tau, s)}}_{\mathclap{\text{learned prior}}}
         \;+\; \lambda_0\,
-        \underbrace{\widetilde{\nabla}_{\hat\tau}\rob_\varphi\big(\hat\tau(s)\big)}_{\mathclap{\substack{
+        \underbrace{\textcolor{cgrad}{\widetilde{\nabla}_{\hat\tau}\rob_\varphi\big(\hat\tau(s)\big)}}_{\mathclap{\substack{
             \text{requirement gradient,} \\ \text{at the predicted endpoint}}}}\hspace{1.2em}"""),
     # eq:smoothness-penalty and eq:grad-normalize, with the mask of Algorithm alg:guided-ode line 7
+    # coloured as fig_guided_sampler.tex: cpink requirement score, cgrey smoothness penalty, cgrad gradient pipeline
     "conditioning": (20, r"""
-        \mathcal{J}(\hat\tau) = \rob_\varphi(\hat\tau) - \gamma\sum_t \big\|p_{t+1}-2p_t+p_{t-1}\big\|^2,
+        \mathcal{J}(\hat\tau) = \textcolor{cpink}{\rob_\varphi(\hat\tau)}
+            - \textcolor{cgrey}{\gamma\sum_t \big\|p_{t+1}-2p_t+p_{t-1}\big\|^2},
         \qquad
-        \widetilde{\nabla} = \frac{\mathrm{mask}_{\mathrm{pos}}\big(\nabla_{\hat\tau}\mathcal{J}\big)}
-                                  {\big\|\mathrm{mask}_{\mathrm{pos}}\big(\nabla_{\hat\tau}\mathcal{J}\big)\big\|}"""),
+        \textcolor{cgrad}{\widetilde{\nabla} = \frac{\mathrm{mask}_{\mathrm{pos}}\big(\nabla_{\hat\tau}\mathcal{J}\big)}
+                                  {\big\|\mathrm{mask}_{\mathrm{pos}}\big(\nabla_{\hat\tau}\mathcal{J}\big)\big\|}}"""),
     # Algorithm alg:guided-ode, lines 4 to 13, and eq:predicted-endpoint
+    # coloured as fig_guided_sampler.tex: ccyan predicted endpoint, cgrad gradient pipeline, cblue prior, cgrey re-pin
     "step": (22, r"""
         \begin{aligned}
-        \hat\tau &= \tau + (1-s)\,\vtheta(\tau, s) && \note{predicted endpoint} \\
-        g &= \widetilde{\nabla}_{\hat\tau}\,\mathcal{J}(\hat\tau) && \note{masked, penalized, normalized gradient} \\
-        \tau &\leftarrow \tau + \Delta s\,\big(\vtheta(\tau, s) + \lambda_0\, g\big) && \note{constant-strength step} \\
-        \proj_0(\tau) &\leftarrow x_{\mathrm{start}} && \note{re-pin the start state}
+        \textcolor{ccyan}{\hat\tau} &\textcolor{ccyan}{{}= \tau + (1-s)\,\vtheta(\tau, s)} && \note{predicted endpoint} \\
+        \textcolor{cgrad}{g} &\textcolor{cgrad}{{}= \widetilde{\nabla}_{\hat\tau}\,\mathcal{J}(\hat\tau)} && \note{masked, penalized, normalized gradient} \\
+        \tau &\leftarrow \tau + \Delta s\,\big(\textcolor{cblue}{\vtheta(\tau, s)} + \lambda_0\, \textcolor{cgrad}{g}\big) && \note{constant-strength step} \\
+        \textcolor{cgrey}{\proj_0(\tau)} &\textcolor{cgrey}{{}\leftarrow x_{\mathrm{start}}} && \note{re-pin the start state}
         \end{aligned}"""),
     # Section sec:setup-metrics
     "metrics": (22, r"""
@@ -171,6 +178,26 @@ EQS = {
     "sampler": (22, r"""
         \hat\tau = \tau + (1-s)\,\vtheta(\tau, s), \qquad
         \tau \leftarrow \tau + \Delta s\,\big(\vtheta(\tau, s) + \lambda_0\, g\big)"""),
+    # Table tab:nav-windows, class 1 instance
+    "nav_reach": (16, r"""
+        \varphi = \Eventually_{[0,63]}\,\mu_1"""),
+    # Table tab:nav-windows, class 2 instance
+    "nav_nested": (16, r"""
+        \varphi = \Eventually_{[0,15]}\,\Always_{[0,48]}\,\mu_1"""),
+    # Table tab:nav-windows, class 3 instance
+    "nav_recurrence": (16, r"""
+        \varphi = \Always_{[0,48]}\,\Eventually_{[0,15]}\,\mu_1"""),
+    # Table tab:nav-windows, class 4 instance
+    "nav_sequence": (16, r"""
+        \varphi = \Eventually_{[0,15]}\mu_1 \wedge \Eventually_{[15,30]}\mu_2 \wedge \Eventually_{[30,45]}\mu_3"""),
+    # Table tab:nav-windows, class 5 instance
+    "nav_seqavoid": (14, r"""
+        \varphi = \Eventually_{[0,15]}\mu_1 \wedge \Eventually_{[15,30]}\mu_2
+        \wedge \Always_{[0,63]}\neg\mu_3 \wedge \Always_{[0,63]}\neg\mu_4"""),
+    # Table tab:nav-windows, class 6 instance
+    "nav_composite": (12, r"""
+        \varphi = \Eventually_{[0,15]}\bigl(\mu_1 \wedge \Eventually_{[0,15]}(\Always_{[0,10]}\mu_2
+        \wedge \Eventually_{[10,22]}\Always_{[0,11]}\mu_3)\bigr) \wedge \Always_{[0,63]}(\neg\mu_4 \wedge \neg\mu_5)"""),
 }
 
 
